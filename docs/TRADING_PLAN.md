@@ -115,7 +115,7 @@ Reference standards: FINRA Rule 15c3-5; Bailey & López de Prado (DSR); walk-for
 | Tick size | round to $0.01; half-penny ticks (Rule 612) arrive Nov 2026 for tick-constrained names incl. SPY; $0.01 rounding remains legal; slippage floors were set under penny ticks | §4.2 |
 | Market data | Basic: free, IEX (~2% of volume), ~30 symbols, **one WebSocket**. Algo Trader Plus: $99/mo, SIP, 10,000 req/min | §2.4 |
 | Hosting | ~$180/yr | §6.1 |
-| Tax | owner's marginal rate (D6; 30% assumed) on **positive** net; losses carry forward, $3,000/yr against ordinary income; fixed costs not deductible without Trader Tax Status (unlikely at ~190 trades/yr; Section 212 deductions suspended permanently); wash sales §6.3 | §6.1 |
+| Tax | **federal only — the owner lives in San Antonio, Texas; Texas has no state or local income tax.** Short-term gains at the owner's federal marginal rate (D6; **24% assumed** until the owner states their bracket), NIIT 3.8% only above $200k MAGI single / $250k joint, on **positive** net; losses carry forward, $3,000/yr against ordinary income; fixed costs not deductible without Trader Tax Status (unlikely at ~190 trades/yr; Section 212 deductions suspended permanently); wash sales §6.3 | §6.1 |
 
 **Quote-data feasibility:** bulk-loading NBBO history is infeasible on Basic (SPY alone is
 ~10M quotes/day). Quotes are fetched only for the `[t, t+1 min]` window of each candidate
@@ -562,21 +562,23 @@ stop_floor × notional cap)` — for S3-ETF on SPY: 0.4% × 67% = **0.27%**; on 
 
 `E[gross] ≈ Sharpe × σ_annual`, `σ_annual = r_eff × σ_R × √(trades/yr)` = 0.22–0.27% × 1 ×
 √189 ≈ **3.0–3.7%**. Sharpe 1–2 → **gross 3–7%/yr**, before the ladder haircut (multiplier
-halves below −5% DD, historically 10–25% of days). Tax on positive net only; fixed costs
-non-deductible; cells the fixed-cost hurdle excludes are marked ✗ (a strategy producing
-them fails G1, so they cannot occur live).
+halves below −5% DD, historically 10–25% of days). Tax is **federal only** (Texas resident:
+no state or local income tax) at the assumed 24% marginal rate on positive net only; fixed
+costs non-deductible; cells the fixed-cost hurdle excludes are marked ✗ (a strategy
+producing them fails G1, so they cannot occur live).
 
-| Equity | Gross 3% | Gross 7% | Tax (30%) | Fixed | Net @3% | Net @7% |
-|--------|----------|----------|-----------|-------|---------|---------|
-| $10,000 | $300 ✗ | $700 | $90–210 | $180 | $30 ✗ | $310 (3.1%) |
-| $15,000 | $450 ✗ | $1,050 | $135–315 | $180 | $135 ✗ | $555 (3.7%) |
-| $25,000 | $750 | $1,750 | $225–525 | $180 | $345 (1.4%) | $1,045 (4.2%) |
-| $50,000 | $1,500 | $3,500 | $450–1,050 | $180 | $870 (1.7%) | $2,270 (4.5%) |
-| $100,000 | $3,000 | $7,000 | $900–2,100 | $180 | $1,920 (1.9%) | $4,720 (4.7%) |
+| Equity | Gross 3% | Gross 7% | Tax (24% federal) | Fixed | Net @3% | Net @7% |
+|--------|----------|----------|-------------------|-------|---------|---------|
+| $10,000 | $300 ✗ | $700 | $72–168 | $180 | $48 ✗ | $352 (3.5%) |
+| $15,000 | $450 ✗ | $1,050 | $108–252 | $180 | $162 ✗ | $618 (4.1%) |
+| $25,000 | $750 | $1,750 | $180–420 | $180 | $390 (1.6%) | $1,150 (4.6%) |
+| $50,000 | $1,500 | $3,500 | $360–840 | $180 | $960 (1.9%) | $2,480 (5.0%) |
+| $100,000 | $3,000 | $7,000 | $720–1,680 | $180 | $2,100 (2.1%) | $5,140 (5.1%) |
 
-Hurdle (after-tax ≥ 2 × $180 = $360 → gross ≥ $514): at Sharpe 1 (3% gross) that needs
-≈ $17k, at Sharpe 1.5 ≈ $10k. **Minimum capital: $15,000** (policy: the hurdle at Sharpe
-~1.2). **Track B**: at s = 1.0 total in-play notional ≤ 13.5% (split over two positions,
+Hurdle (after-tax ≥ 2 × $180 = $360 → gross ≥ $474 at 24%): at Sharpe 1 (3% gross) that
+needs ≈ $16k, at Sharpe 1.5 ≈ $9.5k. **Minimum capital: $15,000** (policy: the hurdle at
+Sharpe ~1.2). If the owner's federal bracket is 32% or higher, the hurdle moves to gross
+≥ $530 and the table's net column drops by about a tenth; the minimum stays $15,000. **Track B**: at s = 1.0 total in-play notional ≤ 13.5% (split over two positions,
 ≈ 6.75% each) and S1 stops of 1–2% give ≈ 0.07–0.14% risk/trade → ≈ $700–1,400 gross on $70k against a $1,370 SIP + hosting
 hurdle of $2,740 after tax. Not viable; deprioritized.
 
@@ -597,7 +599,10 @@ shorting Phase 6 only if permitted at multiplier 1; `r*` monthly.
   any other account, IRA included, converts deferral into permanent disallowance (Rev. Rul.
   2008-5)** — hence the owner rule in §2.1.
 - TTS/475(f) unlikely at ~190 trades/yr; $3,000/yr loss deduction with indefinite
-  carryforward; election deadline April 15 (D6 with an advisor); quarterly estimates.
+  carryforward; election deadline April 15 (D6 with an advisor); quarterly federal
+  estimates. **The owner is a Texas resident (San Antonio): no state or local income tax,
+  no state capital-gains tax, and no state return; the weekly report's after-tax estimate
+  uses the federal rate only.**
 
 ---
 
@@ -735,7 +740,7 @@ shorting only if permitted at multiplier 1.
 | D3 | Notifications | ntfy + email |
 | D4 | Hosting | A: US-East VPS; B: different provider |
 | D5 | Shorting | ETFs only, Phase 6, only if allowed at multiplier 1 |
-| D6 | Marginal tax rate; 475(f) | 30%; no election (advisor) |
+| D6 | Federal marginal tax rate (Texas: no state/local income tax); 475(f) | 24% federal until the owner states their bracket; no election (advisor) |
 | D7 | Point-in-time universe (Track B) | moot while Track B is deprioritized |
 | D8 | **Written acceptance of §0/§6.1 economics (3–7% gross, negative year one)** | required before Phase 5 |
 

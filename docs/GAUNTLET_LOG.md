@@ -217,6 +217,13 @@ unused (Track B is deprioritized on economics instead).
   between 5 and 30 s, signed fill cash, entry-notional definition, ARMED step in re-enable,
   calendar (11–13 months), D8 timing, gauge ticks, band resampling unit, minor wording.
 
+## Post-gauntlet owner fact (2026-09-02)
+
+Owner is a resident of San Antonio, Texas: no state or local income tax. Tax model changed
+from an assumed 30% blended rate to federal-only at an assumed 24% marginal rate (D6 still
+asks the owner for their actual bracket; NIIT noted above its MAGI thresholds). §2.3, §6.1
+(table and hurdle recomputed), §6.3 and D6 updated. Minimum capital unchanged at $15,000.
+
 ## Exit status
 
 Budget (3 rounds × 3 critics) exhausted. No bar item reached a unanimous PASS in three
