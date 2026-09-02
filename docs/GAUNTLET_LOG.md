@@ -195,9 +195,27 @@ unused (Track B is deprioritized on economics instead).
 
 ---
 
-## Smoothing pass — plan v4
+## Smoothing pass — plan v4 (fresh reader, coherence only)
 
-_(pending)_
+29 items (9 blocking, 20 minor), all applied:
+- A leftover per-order cap (25% / $25k) contradicted the 67% SPY sizing that the economics
+  rest on → replaced by the budget cap `B / s_i`.
+- Heartbeat written every 30 s vs a 30 s watchdog trigger → heartbeat moved to the 10 s
+  order-poll loop.
+- `halted_hold` positions would have tripped the 15:57 backstop and the "no latch" gate →
+  "open" now excludes `halted_hold`; AM pass and 16:00:30 GTC placement are scheduled
+  duties, not backstop actions, and use an `AM-` prefix so they do not trigger
+  SAFE-no-submit.
+- The flattener cannot know "non-halted" without a feed → the `opg` pass covers every
+  carried position.
+- Permitted withdrawals (`CSW`) were on the HALT list → allow-listed when matched to a
+  flow-ledger row.
+- Recovery mode was unreachable because the −9% SAFE row survived → superseded rows
+  defined, no-entry line at 11.0%.
+- The protection invariant would have cancelled take-profit legs → TP legs excluded.
+- Receiver volume permissions, id formats, crash-counter clearer, snapshot-age behavior
+  between 5 and 30 s, signed fill cash, entry-notional definition, ARMED step in re-enable,
+  calendar (11–13 months), D8 timing, gauge ticks, band resampling unit, minor wording.
 
 ## Exit status
 
