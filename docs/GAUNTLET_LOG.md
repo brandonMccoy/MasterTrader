@@ -74,6 +74,67 @@ under the MC constraint.
 
 ---
 
-## Round 2 — plan v2
+## Round 2 — plan v2 → v3
+
+**Verdicts:** C-RISK: B1 FAIL, B2 FAIL, B3 FAIL, B5 **PASS** (residuals), B6 FAIL, GROWTH
+FAIL. C-ENG: B1, B6, B7, B8 FAIL. C-REG: B3, B4, B5 FAIL. First PASS recorded (B5 by
+C-RISK); every other item still had mechanism-level defects.
+
+**Findings accepted and applied in v3:**
+- *Budget formula:* v2's `max(N·s) + 0.10·rest` breached 15% with two simultaneous halts at
+  any DD ≥ −5%, and `s` values had zero margin (s_ETF 0.10 = the 2020-03-16 move). Now
+  `L = Σ N_i·s_i` with s = 0.20 SPY/QQQ (Level-3 breaker bound), 0.25 other ETFs, 0.40
+  large caps, **1.00** in-play names (multi-day halt reopens); reserve 0.015; `DD =
+  max(now, at open)`; Intent admission needs a ≤ 5 s account snapshot; no entries at −9%;
+  1 position at −8%; watchdog −10%, flattener −11%; a defined post-halt path (terminal or
+  recovery mode with its own arithmetic). Consequence stated plainly: single-name exposure
+  is capped at ≈ 13% of equity in total.
+- *Broker semantics:* `suspend_trade` would have blocked our own exits → set only after
+  readback 0/0, every exit path un-suspends first, probed in a new Phase 0.6 step producing
+  `docs/BROKER_FACTS.md`; bracket TIF applies to all legs → DAY brackets + standalone GTC
+  stop for halted names; cancel-all stripped the protective stop on a halted name → fixed;
+  every sell path is cancel-then-submit (403 held-qty is not an incident); trim procedure
+  defined; market-wide L1/L2/L3 rules added (L3 does not reopen); `dtbp_check` dropped
+  (deprecated 2026-06-03); margin-call rows and $2k hysteresis removed as dead code at
+  multiplier 1; halt detection via the `statuses` stream; rate limit is per account →
+  per-process budgets; Basic plan allows one WebSocket → watchdog uses REST for liveness.
+- *Isolation & arbitration:* Intent queue was an unspecified deserialization boundary →
+  JSON over a unix socket with a closed schema, two Docker networks, hardened container,
+  extended malicious-strategy test; three flatten actors could live-lock → broker-visible
+  `FLAT-<actor>-` markers with priority; watchdog/flattener actions latch `HALTED_TODAY`;
+  RUNNING reachable only from the 09:15 go/no-go; 2 crashes → HALTED; HALTED = OR of three
+  stores with the watchdog as the sole re-enable consumer; heartbeat carries reconcile and
+  readback timestamps; host B health polled by the engine; AM flattener pass moved to
+  09:30:05–09:30:25 with engine entries from 09:32.
+- *Flows & HWM:* activities lag a day → per-cycle cash identity; block-list replaced by an
+  allow-list (`FILL, FEE, INT*, DIV*`); raw portfolio history is not flow-adjusted → demoted
+  to an alert-only cross-check; proportional withdrawal formula with a unit test.
+- *Halt path:* separate no-key halt-receiver containers writing a file; valid tokens never
+  rate-limited; 202 + incident id + ntfy confirmation; phone-originated acceptance test;
+  watchdog writes its own readback to the dashboard.
+- *Gates & research:* Sharpe ≥ 1.0 line deleted in favor of DSR with N = walk-forward runs;
+  one Monte Carlo definition (day-block bootstrap, 252 days, ladder simulated) shared by G1
+  and `r*`; pointwise bands replaced with simultaneous-coverage envelopes at n ≥ 10 with
+  50% shrinkage; G2/G4 labelled plumbing gates; units defined (allocation, target, clean
+  day, R); signal agreement measured per minute; holdout family defined; ≥ 7 years of data
+  for the regime rule; stop-distance floor enforced by the gate; Track B stress-factor
+  validation added.
+- *Economics:* v2's 9–35% gross was inconsistent with the plan's own MC-implied risk →
+  recomputed as `Sharpe × r_eff × √trades` giving 4–16%; tax applied to gross with fixed
+  costs non-deductible; $3k loss cap and TTS unlikelihood stated; single minimum-capital
+  numbers ($10k Track A, $70k Track B); shutdown rule rewritten to run only after 12 months
+  at full allocation; micro-live uses `max(1 share, 10%)` with SPLG/QQQM.
+- *Roadmap:* fake broker (1.2b) and test fixtures so every Phase-1 acceptance test is
+  runnable; Phase 0.6 probe; VPN/TLS/halt-receiver/backup/rotation steps; synthetic-strategy
+  pass rate ≤ 0.5%; calendar 10–12 weeks for Phase 1, 11–13 months to full allocation.
+
+**Rejected/modified:** C-RISK proposed s = 0.75 for in-play names with a $2B cap floor;
+v3 uses 1.0 with no floor (covers −90% reopens, simpler). C-ENG proposed dropping the
+serial `pending_cancel` wait entirely; v3 keeps a bounded wait only in the per-symbol
+cancel-then-submit path because Alpaca rejects a second sell against held quantity.
+
+---
+
+## Round 3 — plan v3
 
 _(pending)_

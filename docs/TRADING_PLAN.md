@@ -1,24 +1,31 @@
 # MasterTrader — Automated Day-Trading Web App: Master Plan
 
-Status: **v2** (after Gauntlet round 1). Critique history: `docs/GAUNTLET_LOG.md`.
+Status: **v3** (after Gauntlet rounds 1–2). Critique history: `docs/GAUNTLET_LOG.md`.
 Date: 2026-09-02
 
 ---
 
 ## 0. Premise and honesty statement (read first)
 
-**Achievable with high confidence:** a system whose account equity never falls more than
-15% below its high-water mark, enforced by arithmetic (a stress-loss budget), by
-broker-side configuration, and by an off-host flattener that does not depend on the
-trading engine being alive.
+**Achievable with high confidence:** account equity never falls more than 15% below its
+high-water mark. This is enforced by arithmetic (a stress-loss budget that assumes every
+open position suffers its worst plausible move at once), by broker-side configuration,
+and by an off-host flattener that does not depend on the trading engine being alive.
 
-**Not achievable by anyone:** a guarantee of profit. Peer-reviewed evidence: ~64% of US
-day traders lose money after costs (Jordan & Diltz 2003); in Brazil 97% of persistent
-day traders lost (Chague et al.). The most-cited retail intraday strategy (opening-range
-breakout on QQQ) loses nearly all its paper edge at ~2.2¢/share slippage in an
-independent replication. Read §6.1 for the arithmetic: below roughly **$7,500** the
-fixed costs of running this system exceed any plausible edge, and the honest expected
-outcome for most strategy candidates is "does not pass the gates."
+**Not achievable by anyone:** a guarantee of profit. ~64% of US day traders lose money
+after costs (Jordan & Diltz 2003); 97% of persistent Brazilian day traders lost (Chague
+et al.). The most-cited retail intraday strategy (opening-range breakout on QQQ) loses
+nearly all its paper edge at ~2.2¢/share slippage in an independent replication.
+
+**The arithmetic the owner must accept before funding (§6.1):** under a hard 15%
+drawdown constraint, the risk per trade that survives the drawdown Monte Carlo is about
+0.3–0.5% of equity. At one trade a day that is an annual volatility of roughly 5–8%, so a
+genuinely good strategy (Sharpe 1–2 after costs) yields **≈ 4–16% gross per year**, not
+the 50–200% that "day trading" suggests. Fixed costs are ~$180/yr for the ETF track and
+~$1,370/yr with full market data. **Below ~$10,000 the ETF track cannot pay for itself
+after tax; single-name trading needs ~$70,000** and, under the same constraint, is limited
+to a small slice of equity. The honest expected outcome for most strategy candidates is
+"does not pass the gates," in which case the system holds cash.
 
 **The objective is therefore:**
 
@@ -28,13 +35,13 @@ outcome for most strategy candidates is "does not pass the gates."
 > with capital deployed in proportion to demonstrated *live* edge.
 
 **Design principle:** the risk system is the product; strategies are replaceable
-plug-ins. If nothing passes the gates, the system holds cash. Under the constraint that
-is a success.
+plug-ins.
 
 **Interpretation of the 15% rule (stated assumption):** maximum drawdown from the
 high-water mark (HWM) ≤ 15%, where HWM = the highest *daily closing* equity (the
-account is flat at every close, so this is unambiguous), adjusted for external cash flows
-(§4.7), and drawdown is checked continuously against broker-reported equity.
+account is flat at every close, so this is unambiguous), proportionally adjusted for
+owner withdrawals (§4.7), and drawdown is checked continuously against broker-reported
+equity.
 
 ---
 
@@ -42,62 +49,63 @@ account is flat at every close, so this is unambiguous), adjusted for external c
 
 A hostile reviewer, given only this document, must agree all of these hold:
 
-| # | Bar item | Evidence required |
-|---|----------|-------------------|
-| B1 | Drawdown invariant is enforced by a layer strategies cannot bypass, with broker-side backup and an off-host backstop, and the buffer arithmetic holds under stated worst cases (halts, gaps, correlated crash, dead host). | §4.1 formula and worked cases; §4.3–4.6 mechanisms. |
-| B2 | No live capital is risked on a strategy that has not passed all promotion gates; gates are numeric, consistent, and not noise-driven. | §5.4. |
-| B3 | Backtests are cost-inclusive (spread-aware slippage, all fees, fixed costs, tax) and overfitting-resistant (per-fold selection, once-only holdout, registered trials). | §2.3, §5.3. |
-| B4 | The system operates legally and within the broker's actual rules (account model, margin calls, halts, order types, tick sizes, SSR, asset master). | §2.2, §2.4, §4.8. |
-| B5 | Notional never exceeds equity; no external funds; leverage and shorting are disabled at the **broker**, and inflows are detected. | §2.5, §4.7. |
-| B6 | Every component's failure resolves to "flat and halted", never "unknown exposure"; halt is latching; restart cannot re-arm trading. | §4.9 fault table, §4.10 state machine. |
-| B7 | Owner has full visibility and a halt that works when the engine, API, or host is dead. | §7. |
-| B8 | Roadmap steps each have a runnable, falsifiable acceptance test; scope is realistic for one developer. | §10. |
+| # | Bar item | Evidence |
+|---|----------|----------|
+| B1 | Drawdown invariant is enforced by a layer strategies cannot bypass, with broker-side backup and an off-host backstop; the budget arithmetic holds under stated worst cases (multiple simultaneous halts, correlated crash, market-wide circuit breakers, dead host, stale data) and residuals are named. | §4.1 (formula + table), §4.2–4.6 |
+| B2 | No live capital is risked on an unvalidated strategy; gates are numeric, mutually consistent, in defined units, and not noise-driven. | §5.4 |
+| B3 | Backtests are cost-inclusive (spread-aware slippage, all fees, fixed costs, tax) and overfitting-resistant (per-fold selection, once-only holdout, registered trials, DSR with a defined trial count). | §2.3, §5.3 |
+| B4 | The system operates within the broker's actual rules (account model, bracket TIF semantics, held-quantity rejects, halts incl. market-wide, order types, tick sizes, asset master, opening auction). | §2.2, §2.4, §4.2, §4.8 |
+| B5 | Notional never exceeds equity; leverage and shorting are disabled at the broker; external flows are detected the same cycle; HWM is flow-adjusted with one formula. | §2.5, §4.7 |
+| B6 | Every failure resolves to "flat and halted" or a named residual; halt is latching with defined writers/clearers; restart cannot re-arm trading mid-session; concurrent flatten actors are arbitrated. | §4.9, §4.10 |
+| B7 | Owner has fresh visibility even with the engine dead, and a halt that works when the engine, API, or host is dead. | §7 |
+| B8 | Roadmap steps have runnable, falsifiable acceptance tests (with a fake broker where paper cannot exercise them); scope and calendar are realistic for one developer. | §10 |
 
-Reference standards: FINRA Rule 15c3-5 (pre-trade market-access controls) as the model
-for the risk gate; Bailey & López de Prado (Deflated Sharpe Ratio) and walk-forward
-analysis for research hygiene.
+Reference standards: FINRA Rule 15c3-5 (pre-trade controls); Bailey & López de Prado
+(Deflated Sharpe Ratio); walk-forward analysis.
 
 ---
 
-## 2. Hard constraints (facts verified 2026-09-02; unverified items marked)
+## 2. Hard constraints (facts verified 2026-09-02; unverified items marked and probed in Phase 0.6)
 
 ### 2.1 Broker: Robinhood is not viable; Alpaca is primary
 
-- Robinhood: no official stock/options API; Terms of Service prohibit automation; only a
-  crypto API exists. **Rejected.** The owner can still *watch* the Alpaca account in
-  Alpaca's own web dashboard (positions, orders, activity, "liquidate all", "suspend
-  trading"), which is the Robinhood-like view. **Manual trades in the live account will
-  trip reconciliation and be flattened by the engine** (§4.5); the dashboard is for
-  viewing and emergency liquidation only.
-- Alpaca: API-first, commission-free, official `alpaca-py` SDK (Python ≥ 3.10), REST +
-  WebSocket, bracket/OCO/OTO orders, free paper environment, ~200 req/min/key.
-- Backups: Tradier (offers true cash accounts, 120 req/min), Interactive Brokers.
-  Broker adapter is an interface; anything Alpaca-specific in this plan is marked.
+- Robinhood: no official stock/options API; ToS prohibits automation. **Rejected.** The
+  Alpaca web dashboard gives the owner a Robinhood-like view (positions, orders, activity,
+  "liquidate all", "suspend trading"). **Any manual trade, transfer, ACAT, or journal in
+  this account is treated as hostile: the engine flattens/halts.** Keep other investing in
+  a separate account.
+- Alpaca: API-first, commission-free, official `alpaca-py` (Python ≥ 3.10), REST +
+  WebSocket, bracket/OCO/OTO, paper environment. Rate limit is **~200 requests/min per
+  account** (not per key) — budgeted in §4.6.
+- Backups: Tradier (true cash accounts, 120 req/min), Interactive Brokers. The broker
+  adapter is an interface; Alpaca-specific behavior is marked.
 
 ### 2.2 Alpaca account model and regulation
 
-- **Alpaca does not offer cash accounts.** Every account is a margin account. Below
-  $2,000 equity it is a *limited-margin* account: 1× buying power, no shorting,
-  **unsettled proceeds are reusable, no Good-Faith-Violation regime.** The settled-cash
-  ledger from v1 is therefore *not* Alpaca's operating mode; it is retained only as an
-  adapter-conditional module for a true cash-account broker (§4.8.6).
-- FINRA retired the Pattern Day Trader rule effective **2026-06-04** (SEC approval
-  2026-04-14). No day-trade counting, no $25k minimum. Replacement: brokers monitor
-  **intraday margin exposure**; Alpaca publishes "Intraday Buying Power" that updates
-  through the day. Exceeding it creates an **intraday margin call**; repeated unmet calls
-  within five business days can restrict the account for 90 days. This account has no
-  deposit path, so the only cure is liquidation (§4.9).
-- **$2,000 is a live state, not a one-time decision.** Margin features (2× RegT BP,
-  shorting) switch off when equity crosses below $2,000 intraday. The risk gate reads
-  equity every cycle and applies hysteresis: margin-dependent features (Phase 6 shorting
-  only) require equity ≥ $2,300; below $2,100 any short is flattened pre-emptively.
-- Broker-side configuration (Alpaca `PATCH /v2/account/configurations`, fields verified):
-  `max_margin_multiplier = "1"`, `no_shorting = true`, `dtbp_check = "both"` until Phase
-  6. The reconciler asserts these every cycle and halts on mismatch. This makes B5 a
-  broker-enforced fact, not a code promise.
-- Multiple simultaneous API key pairs per live account: **unverified.** Phase 0.2 tests
-  it. If only one key pair can exist, the off-host flattener shares it and independence
-  comes from separate hosts/processes, not separate keys (§4.4).
+- **No cash accounts.** Every account is margin; below $2,000 it is limited-margin (1×,
+  no shorting, unsettled proceeds reusable, no Good-Faith-Violation regime). A
+  settled-cash module exists only for a true cash-account broker (§4.8.6).
+- FINRA retired the Pattern Day Trader rule effective **2026-06-04**. No day-trade
+  counting, no $25k minimum. Alpaca's 2026-06-03 changelog deprecates the PDT/DTBP fields;
+  **`dtbp_check` is not asserted.**
+- Broker-side configuration (`PATCH /v2/account/configurations`): `max_margin_multiplier
+  = "1"`, `no_shorting = true`, `suspend_trade` (semantics probed in 0.6). Asserted every
+  cycle: multiplier, no_shorting, and `suspend_trade == false` whenever the system is not
+  HALTED. Options level 0 and crypto disabled are asserted too; the gate rejects any asset
+  whose `asset_class != us_equity`.
+- With multiplier 1 and long-only, `buying_power == cash`, no debit can arise, and an
+  intraday margin call cannot occur; the margin-call runbook belongs to Phase 6 only.
+  Per-cycle sanity asserts instead: `equity ≥ maintenance_margin`, `cash ≥ −accrued_fees`.
+- The $2,000 threshold is irrelevant at the recommended minimum capital (a 15% drawdown
+  from $10,000 is $8,500); it matters only if D1 < $2,353 and the plan recommends against
+  that.
+- Multiple simultaneous API key pairs per live account: **unverified** (0.2 tests it).
+  Since the rate limit is per account, separate keys buy no independence; independence
+  comes from separate hosts and processes (§4.4).
+- Owner disclosures: margin agreement and FINRA 4210 disclosures apply; opt out of
+  fully-paid securities lending; the high-yield cash program produces `INT` credits
+  (treated as legitimate return); SIP data needs a non-professional self-certification;
+  the 1099-B will carry wash-sale adjustments (§6.3).
 
 ### 2.3 Costs (every one is in the backtester and the weekly report)
 
@@ -106,287 +114,347 @@ analysis for research hygiene.
 | Commission | $0 | — |
 | SEC Section 31 | $20.60 per $1M sold (from 2026-04-04) | sells |
 | FINRA TAF | $0.000195/share sold, cap $9.79/trade | sells |
-| FINRA CAT fee pass-through | ~$0.000001–0.000003/share (Alpaca fee schedule; small, included for completeness) | all executions |
-| **Slippage (entry)** | `max($0.02/share, half NBBO spread at the fill minute from historical SIP quotes) + 5 bp impact` | every fill |
-| **Slippage (stop exit)** | `max($0.04/share, full NBBO spread at the fill minute) + 10 bp` | every stop fill |
-| Stress | run at 1×, 2×, 3×. Must pass G1 at **2×** for ETFs/S&P 500 names, at **3×** for any symbol under $20 or with 20-day median spread > 5 bp | G1 |
-| Market data | Basic: free, IEX only (~2% of volume), ~30-symbol WebSocket cap. Algo Trader Plus: **$99/mo**, full SIP, unlimited symbols | §2.4 |
-| Hosting | ~$10–20/mo (two small VPS) | §6.1 |
-| **Tax** | short-term capital gains at ordinary rates (+3.8% NIIT, + state); wash-sale deferral across year-end from re-trading the same names | §6.1 after-tax table; D6 |
+| CAT fee | $0.000001/share (CAT Fee 2026-1) + $0.000002/share (Historical Assessment 1A) | all executions |
+| Slippage (entry, Track A) | `max($0.02/share, half NBBO spread at the fill minute) + 5 bp` | every fill |
+| Slippage (entry, Track B) | `max($0.02/share, time-weighted 90th-percentile spread within the fill minute) + 5 bp` | every fill |
+| Slippage (stop exit) | `max($0.04/share, full spread) + 10 bp`; Track B intrabar stops fill at `min(stop − slippage, low of trigger bar + half spread)` in stress runs | every stop fill |
+| Stress | 1×, 2×, 3×; G1 at **2×** for Track A, **3×** for Track B | G1 |
+| Market data | Basic: free, IEX only (~2% of volume), ~30-symbol WebSocket cap, **one concurrent WebSocket connection**. Algo Trader Plus: $99/mo, full SIP | §2.4 |
+| Hosting | ~$180/yr (two small VPS + dead-man service) | §6.1 |
+| Tax | short-term gains at the owner's marginal rate (D6; 30% assumed); NIIT only above the MAGI threshold; **fixed costs are not deductible** absent Trader Tax Status, which is unlikely at ~190 trades/yr; net losses deductible only $3,000/yr; wash-sale deferral across strategies and year-end (§6.3) | §6.1 |
 
-### 2.4 Data plan (a design decision, not a budget footnote)
+### 2.4 Data plan
 
-Research uses historical SIP minute bars and quotes (free). Live signals on the Basic plan
-come from IEX (~2% of tape) with a ~30-symbol stream cap. Consequences:
+Research uses historical SIP minute bars and NBBO quotes (free). Live Basic-plan signals
+come from IEX with a ~30-symbol, single-connection stream. **Paper must run on the same
+feed as live for that strategy.**
 
-- Consolidated relative-volume scans across hundreds of names (needed by S1/S4) **cannot
-  be computed** on the Basic plan.
-- IEX prints on mid-cap names can be tens of seconds apart; a research/production feed
-  mismatch is invisible in paper.
+| Track | Instruments | Feed | Precondition |
+|-------|-------------|------|--------------|
+| A | SPY, QQQ (and their lower-priced twins SPLG, QQQM for share granularity), IWM, DIA, sector ETFs | IEX; nightly SIP replay must agree with live per-minute signal state (§5.4 G2) | equity ≥ $10k |
+| B | ≈ 200 most-liquid single names | SIP subscribed before paper | equity ≥ $70k or D2 |
 
-Rule: **paper must run on the same feed as live for that strategy.** Two tracks:
-
-| Track | Strategies | Feed | Precondition |
-|-------|-----------|------|--------------|
-| A: index ETFs (SPY, QQQ, IWM, DIA and sector ETFs) | S2, S3-ETF | IEX is adequate (SPY/QQQ trade heavily on IEX); nightly SIP replay must agree with live signals ≥ 95% (§5.4 G2) | equity ≥ $5k |
-| B: single names ("stocks in play") | S1, S4, S3-stocks | SIP required | SIP subscribed **before** paper starts; equity ≥ $25k unless owner accepts the cost (D2) |
-
-Regular session only (09:30–16:00 ET). No orders before 09:30:30 ET, no `opg`/`cls`
-TIF, no extended hours. Flat by 15:55 ET (engine) / 15:57 ET (watchdog + off-host).
+Regular session only. **Engine entries from 09:32:00 ET** (after the flattener's morning
+pass, §4.4); no `opg`/`cls` TIF; no extended hours; Track B entries end 15:00 and Track B
+positions are closed by 15:30; everything flat by 15:55 (engine) / 15:57 (backstops).
 
 ### 2.5 Capital
 
-- One initial deposit (D1). No deposit code exists in the app, but that is not the
-  control: the reconciler reads `GET /v2/account/activities` for cash-flow types
-  (`CSD`, `CSW`, ACH/wire) every cycle. **Any inflow after go-live → HALT + alert**;
-  any withdrawal is expected only after an owner-acknowledged halt (tax payments) and is
-  applied to the HWM ledger (§4.7).
-- Equity used by every limit = broker-reported `equity − accrued_fees`, never a local
-  mark. Sizing uses **day-start (flat) equity**, so intraday unrealized gains are never
-  sized on.
+- One initial deposit (D1). No deposit code exists, but detection is the control:
+  - **Per-cycle cash identity** (same cycle, no lag): `cash_now − cash_at_open − Σ fill
+    cash − accrued_fee_delta = 0 ± $1`; any residual → treated as an external flow → HALT.
+  - **Nightly activities allow-list:** `FILL`, `FEE`, `INT*`, `DIV*` only. Any other
+    activity with `net_amount ≠ 0` (`CSD`, `CSW`, `JNL*`, `ACAT*`, `FOPT`, …) → HALT.
+    `INT`/`DIV` are legitimate returns and may raise HWM; `FEE` is a loss.
+- Sizing equity `E0 = min(day-start equity − accrued_fees, buying_power)`. A 403
+  "insufficient buying power" is a sizing-bug alert (SAFE), not a hard incident.
 
 ---
 
 ## 3. System architecture
 
 ```
-   Owner's phone/laptop ── WireGuard/Tailscale only ──► Dashboard (API + UI, NO broker keys)
-   Owner's phone ─────────── public HTTPS, bearer token ──► Watchdog  POST /halt   (halt only)
-   Owner's phone ─────────── public HTTPS, bearer token ──► Flattener POST /halt   (halt only)
-   Owner ─────────────────── Alpaca web dashboard ────────► Liquidate all / suspend trading
+ Owner ── WireGuard/Tailscale ──► Dashboard (api + web; NO broker keys; reads DB)
+ Owner's phone ── public HTTPS ──► halt-receiver A (no keys) ─ writes HALT_REQUESTED file ─► watchdog
+ Owner's phone ── public HTTPS ──► halt-receiver B (no keys) ─ writes HALT_REQUESTED file ─► flattener
+ Owner ── Alpaca web dashboard ──► liquidate all / suspend trading (ultimate manual path)
 
- HOST A (US-East VPS)                                     HOST B (different provider)
- ┌──────────────────────────────────────────────┐        ┌──────────────────────────┐
- │ engine container (broker key K1)             │        │ off-host FLATTENER       │
- │  data feed ─► strategy host (separate        │        │  (broker key K2 or K1)   │
- │              container, NO keys, NO egress)  │        │  15:57 ET: cancel+close  │
- │              ─Intents via local queue─►       │        │  09:31 ET: close if any  │
- │  RISK GATE ─► execution adapter ─► Alpaca    │        │  every 60s: DD ≥ 12% →   │
- │  reconciler · recovery state machine         │        │    cancel+close+halt     │
- ├──────────────────────────────────────────────┤        │  serves POST /halt       │
- │ watchdog container (key K2 or K1)            │        │  dead-man ping           │
- │  heartbeat · DD · flatten loop · POST /halt  │        └──────────────────────────┘
- ├──────────────────────────────────────────────┤
- │ api + web (read DB only; owner VPN only)     │        Research: offline, on-demand
- │ postgres (audit, orders, fills, runs)        │        (backtester, walk-forward, gates)
- └──────────────────────────────────────────────┘
+ HOST A (US-East VPS)                                    HOST B (different provider)
+ ┌────────────────────────────────────────────────┐     ┌───────────────────────────┐
+ │ strategies container: NO keys, NO egress,       │     │ flattener (key K2 or K1)  │
+ │   read-only fs, cap_drop ALL, non-root, limits  │     │  09:29 snapshot / 09:30:05│
+ │   ── JSON Intents over unix socket (strat_net) ─┼─┐   │    close overnight carry  │
+ │ engine (key K1)  [core_net]                     │ │   │  15:57 cancel+close+verify│
+ │   feed ─► strategy host ◄───────────────────────┼─┘   │  every 60 s: DD ≥ 11% →   │
+ │   RISK GATE ─► execution adapter ─► Alpaca      │     │    cancel+close+HALT      │
+ │   reconciler · state machine · heartbeat file   │     │  status POST to host A    │
+ │ watchdog (key K2 or K1): heartbeat, DD −10%,    │     │  dead-man ping            │
+ │   flatten loop, re-enable consumer, readback→DB │     └───────────────────────────┘
+ │ halt-receiver A · api/web · postgres            │
+ └────────────────────────────────────────────────┘     Research: offline, dev machine
 ```
 
-**Tech:** Python 3.12 (`alpaca-py`, pandas/numpy, Hypothesis for property tests),
-FastAPI, server-rendered HTML with htmx for the dashboard until Phase 4 (React deferred),
-plain Postgres (Timescale deferred), parquet on disk for research data, Docker Compose,
-`import-linter` in CI. Secrets via environment from a secret file with 0600 perms; live
-keys are not present on any host until G3.
+**Tech:** Python 3.12 (`alpaca-py`, pandas/numpy, Hypothesis), FastAPI + server-rendered
+HTML/htmx (React deferred), plain Postgres, parquet for research data, Docker Compose,
+`import-linter`, WireGuard. Secrets from a 0600 env file; live keys absent until G3.
 
-**Structural rules (enforced, not promised):**
-1. Strategies run in their own container with **no broker credentials and no network
-   egress** (`internal: true` Docker network); `alpaca-py`, `httpx`, `requests` are not
-   installed in that image. Intents cross a local queue. `import-linter` forbids
-   `strategies` → `execution|alpaca|httpx|requests|socket` as a second line. Acceptance
-   test: a deliberately malicious strategy that tries `os.environ`, `importlib`, and raw
-   sockets fails to reach the broker (§10 step 1.9).
-2. Only the Risk Gate produces Orders. The Execution Adapter's submit function takes a
-   `GatedOrder` type constructed only inside the gate module.
-3. The API service holds no broker keys. It reads the DB. Halt goes to the watchdog.
+**Structural rules (enforced, tested):**
+1. **Strategy boundary.** Strategies run in a container on `strat_net` (Docker `internal:
+   true`) whose only other member is the engine's Intent listener; `core_net` (engine, db,
+   watchdog, api) is unreachable from it. Container: `read_only`, `cap_drop: ALL`,
+   non-root, `pids_limit`, `mem_limit`, `cpus`, no shared volumes, no docker socket;
+   `alpaca-py`/`httpx`/`requests` not installed. **Intents are JSON over a unix socket**,
+   validated by a closed pydantic model (`extra='forbid'`, bounded lengths, symbol must be
+   in today's asset master, numeric ranges), max message size, max 10 Intents/s per
+   strategy with drop-on-overflow + incident; never pickle/marshal/yaml. `import-linter`
+   forbids `strategies → execution|alpaca|httpx|requests|socket` as a second line.
+   Acceptance test (1.9): a malicious strategy that tries env/keys, `importlib`, raw
+   sockets to `paper-api.alpaca.markets`, `db:5432`, the watchdog port, and a crafted
+   payload — all fail.
+2. Only the Risk Gate produces Orders (`GatedOrder` type constructible only in the gate
+   module).
+3. The API service holds no broker keys.
 
 ---
 
 ## 4. Risk system — the 15% invariant
 
-### 4.1 Stress-loss budget (replaces static caps)
+### 4.1 Stress-loss budget
 
-Every position and every open entry order carries a **stress factor** `s` = the assumed
-worst intraday adverse move for its instrument class:
+Each position and each unfilled entry order carries a stress factor `s` = assumed worst
+move from entry to the point where we can be flat (including a next-day open for names
+that halt into the close):
 
-| Class | s | Examples |
-|-------|---|----------|
-| Broad-index ETF | 0.10 | SPY, QQQ, IWM, DIA |
-| Sector ETF / S&P 500 name with no scheduled event today or before next open | 0.25 | XLF, AAPL |
-| Any other single name (this is the "stocks in play" universe by construction) | 0.50 | — |
+| Class | s | Basis |
+|-------|---|-------|
+| SPY, QQQ (and SPLG, QQQM) | 0.20 | Market-wide Level-3 breaker halts the day at −20% from prior close; entries are after the open, so entry-to-close loss ≤ 20% |
+| IWM, DIA, sector ETFs | 0.25 | IWM −14% on 2020-03-16 plus LULD band slippage |
+| S&P 500 name, market cap ≥ $10B, no scheduled event today or before next open | 0.40 | 2020-03 single-day large-cap moves; earnings excluded |
+| Any other single name ("stocks in play") | 1.00 | News halts reopen −70–90% (biotech/FDA); multi-day T1 halts. No market-cap floor is assumed |
 
-Definitions (all in fractions of day-start equity `E0`; `N_i` = notional of position or
-unfilled entry order *i*; DD = current drawdown from HWM using broker equity):
+Definitions (fractions of `E0`; `N_i` = notional of position or unfilled entry *i*;
+`DD = max(DD_now, DD_at_open)` from broker equity, so intraday gains never expand the
+budget; reserve 0.015 covers slippage plus ≤ 90 s of trim latency):
 
 ```
-B  = 0.15 − DD − 0.01                         # budget: 15% minus current DD minus 1% slippage reserve
-L  = max_i(N_i · s_i) + 0.10 · (Σ N_i − N_i*)  # worst single name at its stress + 10% on everything else
-Invariant: L ≤ B, checked pre-trade for every Intent and every 30 s by the reconciler.
-If L > B (because DD grew): trim existing positions, largest N·s first, until L ≤ B, within 60 s.
+B = 0.15 − DD − 0.015
+L = Σ_i N_i · s_i                      # every position at full stress simultaneously
+Invariant: L ≤ B, checked (a) per Intent, using an account snapshot ≤ 5 s old
+(re-fetched on each Intent; snapshot age > 30 s → SAFE), and (b) every 30 s.
+If L > B because DD grew: trim non-halted positions, largest N·s first (procedure §4.2),
+until L ≤ B; if still L > B after trimming everything trimmable → SAFE + alert.
 ```
 
-Worked cases (E0 = 100%; the 10% single-name cap below also applies):
-- DD 0, three in-play names at the 10% cap each: L = 0.05 + 0.02 = 0.07 ≤ B = 0.14. A −50% halt-reopen on one plus −10% on the other two = −7%. Holds with room.
-- DD 0, one broad ETF at 100% notional: L = 0.10 ≤ 0.14. OK (this is what lets index strategies express their edge). A −10% index crash day = −10% → hard halt fires, DD −10%, still 5 points under the requirement.
-- DD −5%: B = 0.09; three in-play names at 10%: L = 0.07. Holds. ETF max notional = 90%.
-- DD −9.9% (hard-halt boundary): B = 0.041; the budget now binds below the cap: one in-play name ≤ 8.2%, or ETF ≤ 41%. A −50% halt on 8.2% = −4.1% → DD −14.0%. Holds.
-- Correlated crash (2020-03-16 pattern) at DD −4.9%, three S&P names at 10% each (s = 0.25): L = 0.025 + 0.02 = 0.045 ≤ 0.091. A −14% average fill on all three = −4.2% → DD −9.1%. Holds.
+Ladder (all latching until the next 09:15 go/no-go unless stated):
 
-**Additional hard caps** (defense in depth; all measured on `E0`):
+| DD from HWM | Action |
+|-------------|--------|
+| −5% | `r*` × 0.5 |
+| −8% | `r*` × 0.25; max 1 position; only the top-ranked strategy |
+| −9% | **no new entries** (SAFE) |
+| −10% | **hard halt** (engine); watchdog independently flattens at −10% too |
+| −11% | off-host flattener cancels, closes, sets HALTED |
+| Recovery mode (§4.12) | after owner review: entries only while DD > −11.5%; terminal halt at −12%; watchdog −12.5%; flattener −13% |
 
-| Rule | Value |
-|------|-------|
-| Single non-ETF name notional | ≤ 10% of E0 regardless of budget |
-| Gross notional (positions + open entries) | ≤ 100% of E0 (no leverage; enforced at broker via `max_margin_multiplier=1`) |
-| One position **or** open order per symbol across all strategies | Intent rejected otherwise |
-| Concurrent positions | ≤ 3 |
-| Per-trade stop-distance risk | `r*` (§5.6), initial 0.5%; 0.25% for a strategy in micro-live (per strategy, not global) |
-| Daily loss (broker equity vs E0) | −2.0% → flatten, no entries until next session |
-| Weekly loss | −4.0% → flatten, halt until Monday + owner ack |
-| Drawdown ladder | −5%: `r*` ×0.5; −8%: `r*` ×0.25, only top-ranked strategy trades; **−10%: hard halt (latching)**; −12%: watchdog and flattener close everything independently |
-| Absolute sanity caps | per-order notional ≤ configured $X; entry limit price within 1% of last trade; ≤ 20 orders/day/strategy; ≤ 60 orders/day; ≤ 5 orders/min; qty must be ≥ 1 after `floor()` and the *rounded* qty must still satisfy every limit |
-| Universe exclusions | any symbol with earnings/scheduled event today or before next open; any symbol with an LULD pause today; any symbol not `tradable && status == active` in the morning asset-master refresh; price < $5; 20-day median 1-min volume too small for the capacity rule |
+Worked cases (E0 = 100%):
 
-Why the 5-point gap between the −10% hard halt and the 15% requirement still exists: it
-covers the residual that no pre-trade rule can prevent — a broker outage or double host
-failure while a position is halted. With the budget formula, the worst pre-trade-allowed
-outcome at −9.9% is −14.0%; the remaining 1% is the slippage reserve.
+| DD at entry | B | Permitted configuration | Event | Result |
+|---|---|---|---|---|
+| 0 | 0.135 | SPY 67% notional (0.20 × 0.67 = 0.134) | Level-3 day, −20% from prior close, stop fills at halt | −13.4% → DD −13.4%. Holds |
+| 0 | 0.135 | 3 in-play names, 4.5% each (Σ 1.0 × 0.135) | all three halt, reopen −90% | −12.2% → DD −12.2%. Holds |
+| 0 | 0.135 | 3 large caps, 10% each (Σ 0.4 × 0.30 = 0.12) | 2020-03-16 pattern, all three −25% LULD reopen | −7.5% → DD −7.5%. Holds |
+| −5% | 0.085 | SPY 42% | −20% | −8.4% → DD −13.4%. Holds |
+| −8% | 0.055 | 1 SPY position 27% | −20% | −5.4% → DD −13.4%. Holds |
+| −8.9% (last entry allowed) | 0.046 | 1 SPY 23% | −20% | −4.6% → DD −13.5%. Holds |
+| −8.9% | 0.046 | 1 in-play 4.6% | −90% | −4.1% → DD −13.0%. Holds |
 
-### 4.2 Orders (Alpaca-specific behaviors, verified)
+Additional hard caps (defense in depth, on E0): single non-ETF name ≤ 10%; gross notional
+(positions + open entries) ≤ 100% (broker: multiplier 1); one position **or** open order
+per symbol across strategies; ≤ 3 concurrent positions; per-trade stop-distance risk
+≤ `r*` (§5.6), 0.25% for a strategy in micro-live (per strategy); daily loss −2% →
+flatten, no entries until next session; weekly −4% → flatten, owner ack; per-order
+notional ≤ configured $X; entry limit within 1% of last trade; ≤ 20 orders/day/strategy,
+≤ 60/day, ≤ 5/min; qty must be ≥ 1 after `floor()` and the rounded qty must satisfy every
+limit; per-strategy **stop-distance floor enforced by the gate** (Intent rejected below
+it); universe exclusions: scheduled event today or before next open, LULD pause today,
+ex-dividend/split today, not `tradable && active`, price < $5, insufficient median volume,
+`asset_class != us_equity`.
 
-- Every entry is a **bracket**: limit entry (≤ 1% from last), **sell stop (market)** leg,
-  limit take-profit leg. Alpaca converts *buy* stops to stop-limit (4%/2.5% band) but
-  **does not convert sell stops**, so long exits are true market stops. Stop-limit exits
-  are prohibited by the gate. Bracket child legs use **GTC** so they do not expire at
-  16:00 if anything is still open. Brackets cannot be fractional; qty is integer.
-- Prices rounded to the legal tick (2 decimals ≥ $1, 4 below), stops rounded *away* from
-  entry; unit-tested. Any `rejected` order event is a hard incident (SAFE mode).
-- `client_order_id = hash(strategy_hash, symbol, session_date, seq)`; Alpaca enforces
-  uniqueness server-side (422). After any submit timeout, the adapter queries
-  `GET /v2/orders:by_client_order_id` before retrying. On startup the order book is
-  rebuilt from `GET /v2/orders?status=all&after=<session_open>`.
-- No stop-leg modification based on stale data. Stale → close at market via the normal
-  path.
+**Named residuals (not covered by the budget):** (1) a market-wide Level-3 day followed by
+a further gap at the next open (SPY has never gapped −5% after an L3 day, but nothing
+prevents it); (2) a broker outage that coincides with (1); (3) three simultaneous −100%
+single-name outcomes (Σ at s = 1.0 covers −90%). The 5-point gap between the −10% halt and
+the 15% requirement is what absorbs these.
 
-### 4.3 Watchdog (host A, separate container, separate credentials if possible)
+### 4.2 Orders (Alpaca-specific, verified unless marked)
 
-- Polls engine heartbeat file/HTTP (not DB) every 5 s; broker account every 15 s;
-  subscribes to one symbol (SPY) itself for feed liveness.
-- Triggers: heartbeat > 30 s with **open positions or open orders**; equity < HWM × 0.88;
-  ≥ 15:57 ET (per broker `/v2/clock` and calendar, incl. early close) with anything
-  open; engine reports DB down > 5 min; margin call event.
-- Action = **verified flatten loop** (§4.6), incident row, owner alert.
-- Serves `POST /halt` (halt only, bearer token, rate-limited) on its own port; the
-  reverse proxy routes it directly. This is what the UI HALT button and the phone URL
-  hit.
-- Pings an external dead-man service every 60 s; a missed ping alerts the owner.
-- Lower `oom_score_adj` than the engine; `mem_limit` set on both.
+- Entry = **DAY bracket**: limit entry (≤ 1% from last), sell-stop (market) leg, limit
+  take-profit leg. **Bracket TIF applies to all legs**, so brackets are DAY, and any
+  position still open after 16:00 (halted name) gets a **standalone GTC stop-market** at
+  the original stop level, placed after the DAY orders expire (whether an order can be
+  accepted on a halted symbol is probed in 0.6). Alpaca converts *buy* stops to stop-limit
+  but **not sell stops**, so long exits are true market stops. Stop-limit exits are
+  prohibited.
+- **Every sell path is cancel-then-submit:** cancel that symbol's open sell orders → wait
+  until none is `pending_cancel` → submit. Alpaca rejects a second sell against held
+  quantity (403 `insufficient qty available`), so this 403 is a "cancel first" signal, not
+  a hard incident. Single writer per symbol (§4.6 arbitration).
+- **Trim procedure:** cancel legs → confirm → market-sell the trim qty → re-place a stop
+  for the remainder.
+- Prices rounded to legal ticks (stops rounded away from entry); qty integer; any
+  `rejected` order event other than 403-held-qty and 403-buying-power → SAFE.
+- `client_order_id = <actor>-<strategy_hash>-<symbol>-<date>-<seq>`; Alpaca enforces
+  uniqueness (422). After any submit timeout, query by client order id before retrying. On
+  boot, rebuild from `GET /v2/orders?status=all&after=<session_open>` (paginated, 500/page).
+- No stop-leg modification on stale data; stale → close via the normal path.
+- Halt detection: subscribe to the `statuses` stream for all held symbols (counts toward
+  the 30-symbol cap); `sc == "H"` → position state `halted`.
 
-### 4.4 Off-host flattener (host B, different provider)
+### 4.3 Watchdog (host A, separate container)
 
-State-independent by design: it does not care what the engine or watchdog believe.
-- 15:57 ET every trading day (calendar from broker): cancel all → close all → verify.
-- 09:31 ET: if anything is open (e.g., halted into the close yesterday), close it.
-- Every 60 s during the session: if broker equity < HWM × 0.88 → cancel, close, set
-  `suspend_trade = true` at the broker, alert.
-- Serves `POST /halt` too. Holds key K2 if Alpaca allows two key pairs, else K1.
-- Its own dead-man ping.
+- Reads the engine **heartbeat file**, which the reconciler writes at the end of each
+  successful cycle with `last_reconcile_ts` and `broker_readback_ts` (liveness *and*
+  correctness); polls the broker every 15 s; feed liveness via REST `latest/trades/SPY`
+  compared with the engine's last-message timestamp (no second WebSocket — Basic plan
+  allows one connection).
+- Triggers: heartbeat > 30 s or readback age > 90 s with **open positions or orders**;
+  DD ≥ 10%; ≥ 15:57 ET (broker clock/calendar incl. early close) with anything open;
+  engine reports DB down > 5 min; `HALT_REQUESTED` file present.
+- Action: verified flatten loop (§4.6) with `FLAT-WD-` markers; writes `HALTED_TODAY`;
+  writes its own broker readback (positions, orders, equity, flatten state, timestamp)
+  to the DB every 15 s for the dashboard; incident row; owner alert.
+- Consumes owner re-enable rows (§4.10); dead-man ping every 60 s; `oom_score_adj` lower
+  than the engine.
+
+### 4.4 Off-host flattener (host B, different provider; state-independent)
+
+- 09:29:00 snapshot of positions (= overnight carry). 09:30:05–09:30:25: for those symbols
+  only, cancel their orders → confirm → market close, `FLAT-AM-` markers. Engine entries
+  start 09:32:00 and the go/no-go requires "no position at 09:29 or AM pass reported flat".
+- 15:57 ET: if broker readback is non-flat, run the flatten loop (`FLAT-B-`).
+- Every 60 s during the session: DD ≥ 11% → flatten loop, then HALTED.
+- Serves status to host A every 60 s (signed); its own dead-man ping; `HALT_REQUESTED`
+  file from halt-receiver B.
+- HWM: receives a signed daily HWM from the watchdog; fallback = broker portfolio history
+  minus the flow ledger (§4.7).
+- Host B firewall: outbound only to Alpaca, ntfy, host A; inbound only the halt receiver.
 
 ### 4.5 Reconciliation (every 30 s and after every fill event)
 
-1. Fetch broker positions, open orders, account (equity, accrued fees, multiplier,
-   configurations, activities since last check).
-2. Local vs broker mismatch → SAFE (no new entries) + alert; two consecutive → flatten
-   using **broker truth** (`DELETE /v2/positions?cancel_orders=true`), never the local
-   book.
-3. **Position-protection invariant:** for every open position there is exactly one open
-   sell-stop with `qty == position qty`. Otherwise place one immediately; if that fails
-   within 10 s, close the position.
-4. Budget check `L ≤ B` (§4.1); trim if violated.
-5. Assert `multiplier == 1`, `no_shorting == true`, account id == configured, env ==
-   configured (paper/live) — halt on any mismatch.
-6. Cash-flow detection (§2.5).
+1. Fetch positions, open orders, account (equity, cash, accrued fees, buying power,
+   multiplier, configurations), activities since last check.
+2. **Arbitration check first:** if any `FLAT-*` order exists since session open, or
+   `suspend_trade == true`, or `HALT_REQUESTED`/`HALTED_TODAY` is set → SAFE-no-submit;
+   touch nothing.
+3. Local vs broker mismatch → SAFE + alert; two consecutive → flatten with broker truth.
+4. **Position-protection invariant:** every open position has exactly one open exit order
+   (sell-stop, or a resting market sell during a halt) with `qty == position qty`;
+   otherwise cancel-then-place a stop; if that fails within 10 s, cancel-then-close.
+5. `L ≤ B` check; trim if violated (§4.2 procedure).
+6. Assert multiplier 1, `no_shorting`, `suspend_trade == false` (when not HALTED), options
+   level 0, crypto disabled, account id, env; halt on mismatch.
+7. Cash identity (§2.5); sanity asserts (§2.2).
+8. Write heartbeat file with timestamps.
 
-### 4.6 Verified flatten loop (used by engine, watchdog, flattener, and HALT)
+### 4.6 Verified flatten loop and arbitration
 
 ```
-loop until broker readback shows 0 open orders AND 0 positions:
-    DELETE /v2/orders
-    wait until no order is 'pending_cancel' (poll 2 s, max 30 s)
-    DELETE /v2/positions?cancel_orders=true
-    for any position still open after 20 s: submit market sell for full qty
-    if a symbol is HALTED: leave the market sell resting, mark 'halted_hold', page owner
-    escalate alert every 30 s
+un-suspend: GET configurations; if suspend_trade == true → PATCH false (audit row)
+loop until broker readback shows 0 open orders AND 0 positions (or only 'halted_hold'):
+    DELETE /v2/positions?cancel_orders=true          # cancels and closes in one call
+    for positions still open after 20 s: cancel that symbol's sells → confirm → market sell (concurrent per symbol)
+    halted symbol: leave the resting market sell; mark 'halted_hold'; page owner
+    bounded backoff on 429 (1→2→4→8 s), never abandon; escalate alert every 30 s
 report "flat" only from broker readback, with timestamp
+suspend_trade = true ONLY after readback 0/0 and no 'halted_hold' exists
 ```
 
-Rate-limit budgeting: each key has one token bucket; a reserved allocation exists for
-cancel/close calls; flatten retries are exempt from backoff caps; the API/UI never
-touches the broker.
+**Arbitration (broker-visible, no shared state needed):** every actor's orders carry
+`FLAT-<actor>-` client-order-id prefixes; priority flattener > watchdog > engine; a
+lower-priority actor that sees a higher-priority marker stops submitting. Engine's 15:55
+sweep is primary; backstops act only if readback is non-flat at 15:57. Any
+watchdog/flattener flatten sets `HALTED_TODAY`.
+
+**Rate budget (per account, 200/min):** engine ≤ 100/min, watchdog ≤ 40, flattener ≤ 40,
+20 reserve; the API service never touches the broker.
 
 ### 4.7 High-water mark and drawdown ledger
 
-- HWM = max daily closing equity, **flow-adjusted** (withdrawals whitelisted only after an
-  owner-acked halt; any deposit halts). Never decreases.
-- Stored in three places: DB, a file on the watchdog volume, and derived from Alpaca
-  `GET /v2/account/portfolio/history`. On every start, engine, watchdog, and flattener
-  each take `max(all sources)`. Unit test: delete the DB → HWM unchanged.
-- Intraday DD is measured with broker equity vs this HWM. Local marks are display-only.
+- HWM = max daily closing equity, adjusted **proportionally** for owner withdrawals:
+  `HWM ← HWM × (E − W) / E` on a withdrawal `W` from equity `E` (withdrawals are
+  permitted only after an owner-acked halt). Deposits are not permitted (HALT). `INT`/`DIV`
+  raise equity legitimately. Unit-tested: HWM 100k, E 95k, W 30k → DD 5.0%.
+- Authoritative stores: latch/HWM file on a volume mounted read-write in **both** engine
+  and watchdog, plus the DB, each with the flow ledger attached. Broker portfolio history
+  minus the ledger is an **alert-only cross-check** (a source without a flow ledger is
+  never used in `max`). "Agreeing" = within $1. On start each process takes the max of
+  the authoritative stores; HWM never decreases except by the withdrawal formula.
+- Intraday DD uses broker equity vs HWM; local marks are display-only.
 
-### 4.8 Market-structure hazards (each with a rule)
+### 4.8 Market-structure hazards
 
-1. **LULD / news halts:** `halted` is a first-class position state. Cancel works, close
-   does not. Rule: no new entries in a symbol halted today; on reopen submit a market
-   exit and log an incident; a name halted into the close is held with its GTC stop
-   resting, the flattener closes it at 09:31, and the stress budget already priced it at
-   s = 0.5. Market-wide Level-3 halt → flatten at reopen, halt for the day.
-2. **Margin call (intraday framework):** liquidate to cure within the session; if the
-   uncurable case (halted symbol) occurs, page owner; record that the account may be
-   restricted; engine halts for the day.
-3. **Corporate actions:** signal features use `adjustment=all` bars; qty/fee accounting
-   uses raw. Ex-dividend/split dates from the announcements API; symbols with an ex-date
-   or split effective today are excluded (S4 gap sizes dividend-adjusted).
-4. **Asset master refresh** every morning from `/v2/assets`; only `tradable && active`
-   symbols; symbol changes/delistings handled by exclusion.
-5. **Opening auction:** no orders before 09:30:30; entries are limit orders.
-6. **True cash-account broker (Tradier fallback only):** settled-cash ledger with
-   business-date settlement queue, per-lot `funded_by` tag, GFV count (rolling 12 months),
-   90-day restriction state; rule `settled_available = settled_at_open − Σ cost of all
-   buys today`. Under T+1 each dollar round-trips once per day, so ~100% deployable.
-7. **Shorting (Phase 6 only, ETFs only):** SSR (Rule 201) flag detection,
-   `shortable`/`easy_to_borrow` flags, buy-stop conversion band accounted for in the
-   budget, `no_shorting=false` only after the Phase 6 gate.
-8. **Sub-$2k crossing** handled per §2.2.
+1. **Single-stock LULD/news halts:** `halted` is a first-class state (statuses stream).
+   No new entries in a symbol halted today. Halted position: resting market sell stays;
+   after 16:00 a standalone GTC stop is placed; the flattener's AM pass closes it at
+   09:30:05 via cancel-then-market; incident logged. The budget already priced it at
+   s = 1.0 (in-play) or 0.40 (large cap).
+2. **Market-wide circuit breakers:** Level 1/2 (−7%/−13%, 15-minute halts, not after
+   15:25): cancel entries, keep stops, no new market sells until 60 s after reopen.
+   Level 3 (−20%): trading ends for the day; all positions become `halted_hold`, closed
+   by the AM pass; budget uses s = 0.20 for SPY/QQQ for this reason. Residual named in
+   §4.1.
+3. **Corporate actions:** features on `adjustment=all` bars, accounting on raw;
+   announcements API (ingested the day after declaration; same-day special dividends are
+   invisible — residual); symbols with ex-date or split today excluded.
+4. **Asset master** refreshed every morning; only `tradable && active && us_equity`.
+5. **Opening auction:** no orders before 09:30:05 (flattener) / 09:32:00 (engine).
+6. **True cash-account broker (fallback only):** settled-cash ledger with business-date
+   settlement queue, per-lot `funded_by`, GFV count, restriction state;
+   `settled_available = settled_at_open − Σ cost of all buys today`.
+7. **Shorting (Phase 6, ETFs only):** requires verifying that shorting is permitted at
+   multiplier 1 (unverified; if it requires multiplier 2, shorting is dropped — leverage
+   is never enabled); SSR detection; `shortable`/`easy_to_borrow`; buy-stop conversion band
+   in the budget.
 
-### 4.9 Fault table (every row resolves to flat/halted or a named residual)
+### 4.9 Fault table
 
 | Fault | Detection | Resolution |
 |-------|-----------|------------|
-| Engine crash/OOM | watchdog heartbeat > 30 s | watchdog flatten loop if positions **or orders** open; engine restarts into RECOVERING (§4.10) |
-| Engine restart after a halt | latching `HALTED` flag (file on watchdog volume + DB + broker `suspend_trade`) | startup refuses to trade; re-enable only via TOTP action + audit row |
-| Watchdog crash | engine polls watchdog heartbeat; external dead-man | engine: no new entries if watchdog stale > 30 s; owner paged; flattener unaffected |
-| Both crash / host A reboot | dead-man misses | flattener (host B) still runs 15:57 / 12% / 09:31 rules; owner runbook: Alpaca dashboard liquidate-all + suspend trading |
-| Host B down | its dead-man | owner paged; host A still protects; no new entries until B is back (go/no-go §4.11) |
-| DB down | engine health | SAFE immediately (no safety decision depends solely on DB); flatten if > 5 min |
-| Broker API 5xx/429 storm | N failed polls | broker-side stops still live; after 2 min unreachable → on recovery: cancel-all/close-all, halt for the day, post-mortem. **Residual:** an outage coinciding with a gap; the stress budget is sized for it |
-| Market-data WS silent disconnect | zero messages across all symbols for > 15 s while `clock.is_open` | force reconnect + REST poll; positions still protected by broker stops |
-| Trade-update WS drop / missed fill | REST order poll every 10 s; replay since last event on every reconnect | reconciler catches within 30 s |
-| Clock skew | compare local clock with `/v2/clock` every cycle; > 2 s | SAFE; all session times use broker clock |
-| Deploy during session | deploy script checks `clock.is_open && (positions || orders)` | refuses unless `--flatten-first`; no auto-deploy |
-| Secrets leak / unknown-cause halt | — | rotate keys per runbook; keys rotated after any halt of unknown cause |
-| Bracket legs partially cancelled / partial fill orphan | position-protection invariant (§4.5.3) | protective stop placed or position closed |
-| Order stuck `pending_cancel` | flatten loop | loop waits, then market-sells; never reports flat until readback |
-| Paper/live key mix-up | startup + every cycle: account id and env asserted | refuse to start / halt |
-| Halted symbol | §4.8.1 | held with resting stop; closed at reopen/09:31; incident |
-| Notification channel dead | 09:25 ET daily "alive" message | missing message is the alarm |
-| Margin call | account event / activities | liquidate to cure; halt for the day |
+| Engine crash/OOM | heartbeat or readback age | watchdog flatten if positions **or orders** open; `HALTED_TODAY`; engine reboots into SAFE for the rest of the session; **2 crashes in a session → HALTED (latching)** |
+| Engine hung (heartbeat thread alive, loop dead) | readback age > 90 s | same as crash |
+| Engine restart after halt | HALTED = OR(file, DB, `suspend_trade`) | boot refuses to trade; re-enable only via §4.10 |
+| Watchdog crash | engine polls watchdog heartbeat; dead-man | engine SAFE if stale > 30 s; owner paged; flattener unaffected |
+| Both crash / host A dead | dead-man | flattener 15:57 / 11% / AM rules; runbook: Alpaca dashboard liquidate-all + suspend trading (probed in 0.6) |
+| Host B down mid-session | engine polls host B health every 60 s | SAFE for the session if stale > 3 min |
+| DB down | engine health | SAFE immediately; latch/HWM live in the file; flatten if > 5 min; **DB down at boot → close all, SAFE** |
+| Broker 5xx/429 storm | failed polls | broker-side stops live; after 2 min unreachable → on recovery cancel-all/close-all, halt for the day. Residual: coincident gap |
+| Data WS silent disconnect | zero messages > 15 s while open | reconnect + REST poll; stops at broker |
+| Trade-update drop | REST order poll every 10 s; replay on reconnect | reconciler ≤ 30 s |
+| Clock skew | vs `/v2/clock` each cycle, > 2 s | SAFE |
+| Deploy during session | script checks `clock.is_open && (positions || orders)` | refuses unless `--flatten-first` |
+| Secrets leak / unknown-cause halt | — | rotation runbook (coordinated across hosts if one key pair) |
+| Partial fill / orphan leg | protection invariant | stop placed or position closed (cancel-then-submit) |
+| Order stuck `pending_cancel` | flatten loop | wait, then market sell; never "flat" without readback |
+| Second sell rejected 403 held-qty | adapter | cancel that symbol's sells first; not an incident |
+| Paper/live mix-up | account id + env asserted each cycle | refuse / halt |
+| Halted symbol | statuses stream | §4.8.1 |
+| L > B with nothing trimmable | budget check | SAFE + alert |
+| Notification channel dead | 09:25 "alive" message | missing = alarm |
+| Spurious halt (attacker replays token) | idempotent halt | harmless to capital; failed-auth IPs banned; token rotated |
 
-### 4.10 Engine state machine
+### 4.10 Engine state machine and halt semantics
 
 ```
-BOOT → RECOVERING (rebuild orders/positions from broker; load HWM = max(sources);
-        assert account id/env/config; if HALTED flag set → stay HALTED)
-     → SAFE (manage exits only; no entries) → RUNNING (after clean reconcile,
-        fresh watchdog + flattener heartbeats, go/no-go passed)
-Any trigger → SAFE (recoverable) or HALTED (latching; requires TOTP re-enable + written post-mortem)
-Positions found at boot that do not match DB-recorded brackets are closed immediately.
+BOOT → RECOVERING (rebuild from broker; HWM = max(file, DB); assert config/id/env;
+        DB down → close all; HALTED flag set → HALTED)
+     → SAFE (exits only)
+     → RUNNING  ONLY from the 09:15 go/no-go; a mid-session boot stays SAFE all session
+FLATTENING (engine 15:55 sweep or trigger) → SAFE
+HALTED_TODAY (set by any backstop action or crash) → clears at next 09:15 go/no-go
+HALTED (latching; −10%, config mismatch, inflow, 2 crashes, owner halt)
 ```
 
-### 4.11 Pre-session go/no-go (09:15 ET, all must pass or the day is skipped)
+HALTED = OR over the latch file, the DB row, and `suspend_trade`. **Re-enable:** owner
+writes a TOTP-verified row in the DB via the dashboard; the **watchdog** consumes it,
+verifies, clears the file, PATCHes `suspend_trade=false`, writes the audit row; the
+engine boots to SAFE and reaches RUNNING at the next 09:15. Test: without a valid row,
+restart leaves HALTED; with it, engine reaches SAFE and `suspend_trade == false`.
 
-Clock skew OK · calendar fetched (incl. early close) · asset master refreshed · earnings/
-event exclusions loaded · reconciliation clean · watchdog + flattener heartbeats fresh ·
-HWM loaded from ≥ 2 sources and agreeing · `multiplier==1`, `no_shorting==true` ·
-no cash inflow detected · no HALTED flag · notification "alive" sent.
+### 4.11 Pre-session go/no-go (09:15 ET; all must pass or the day is skipped)
+
+Clock skew OK · calendar (incl. early close) · asset master refreshed · event exclusions
+loaded · no GTC order older than today except a `halted_hold` stop · reconciliation clean ·
+watchdog + flattener heartbeats fresh · HWM file and DB agree · multiplier 1,
+`no_shorting`, `suspend_trade == false`, options 0, crypto off · no inflow · no HALTED ·
+AM pass reported flat · "alive" message sent.
+
+### 4.12 After a −10% halt (defined path)
+
+Default is **terminal**: the owner reviews the post-mortem and decides. Option (b),
+recovery mode, keeps the original HWM (the 15% is absolute): `r*` × 0.25, max 1 position,
+entries only while DD > −11.5%, terminal halt at −12%, watchdog −12.5%, flattener −13%.
+Arithmetic at −11.5%: B = 0.02 → SPY ≤ 10% notional → −20% on it = −2% → DD −13.5%.
+Holds.
 
 ---
 
@@ -395,292 +463,315 @@ no cash inflow detected · no HALTED flag · notification "alive" sent.
 ### 5.1 Principles
 
 1. A strategy is a pure function `(bars, features, account_state) → Intents`. No I/O.
-2. Same code in backtest, paper, live (one event-loop abstraction with a clock and a data
-   source). A strategy's identity is `(code_hash, config_hash)`; **any change creates a
-   new strategy at state Idea.** The gate refuses Intents from a hash not in the DB at
-   the required state.
+2. Same code in backtest, paper, live. Identity = `(code_hash, config_hash)`; any change
+   = new strategy at Idea. The gate refuses Intents from a hash not at the required state.
+   Promotion/demotion rows are append-only and git-committed (the owner is also the
+   developer).
 3. Portfolio of small, uncorrelated, validated edges; allocation by live track record.
-4. No discretion, no news reading, no sub-second latency: a 200 req/min retail API
-   competes on discipline and cost control, not speed.
+4. No discretion, no news, no sub-second latency.
 
 ### 5.2 Candidate strategies (research queue)
 
-| ID | Track | Strategy | Prior evidence | Known weakness to test |
-|----|-------|----------|----------------|------------------------|
-| S3-ETF | A | VWAP mean-reversion on SPY/QQQ/IWM: fade > 2σ extension from VWAP after 10:00 with volume exhaustion; target VWAP; stop 1×ATR(5m); trend-day filter (opening range > 0.8×ATR(daily) disables) | Widely used in execution literature | Trend-day tail; must be ≥ 0.75 trades/day to be gateable |
-| S2 | A | Intraday momentum on SPY/QQQ with noise band (Zarattini, Barbon & Aziz 2024): band = avg of past 14 days' |move from open| by time-of-day; enter on break; trailing stop at band; VIX-scaled sizing; exit at close | Paper: Sharpe ~1.3–2.4 depending on version, beta ≈ 0, 2007–2024 | Leverage-dependent in the paper (we run ≤ 100% notional); regime concentration; costs |
-| S1 | B | Opening Range Breakout on stocks in play: RVOL = (pre-market + first-5-min volume) / same-window 14-day avg ≥ 2; price > $5; ATR filter; 5-min OR; entry on break; stop = OR opposite side or 10% ATR whichever tighter; exit at close/target | Zarattini & Aziz; QQQ replication matched paper *before* costs | Break-even at ~2.2¢/share on QQQ; 76% of PnL from 2022; in-play names halt |
-| S4 | B | Gap continuation/fade by gap size & pre-market volume | Mixed | Needs SIP pre-market; dividend adjustment |
-| S5 | — | Hold cash | 0% drawdown | Default whenever nothing else passes |
+| ID | Track | Strategy | Prior evidence | Known weakness |
+|----|-------|----------|----------------|----------------|
+| S3-ETF | A | VWAP mean-reversion on SPY/QQQ/IWM after 10:00: fade > 2σ from VWAP with volume exhaustion; target VWAP; stop = max(1×ATR(5m), **0.4% floor**); trend-day filter | Execution literature | Must reach 0.75 trades/day; tight stops cannot express `r*` |
+| S2 | A | Intraday momentum on SPY/QQQ with noise band (Zarattini, Barbon & Aziz 2024); trailing stop at band; VIX-scaled sizing; exit at close | Sharpe ~1.3–2.4 in paper versions, beta ≈ 0 | Paper uses leverage; we run ≤ 67% notional; costs; regime |
+| S1 | B | ORB on stocks in play: RVOL = (pre-market + first-5-min volume)/same-window 14-day avg ≥ 2; price > $5; 5-min OR; stop = OR opposite side or 10% ATR | Zarattini & Aziz; QQQ replication matched *before* costs | Break-even ~2.2¢/share; 76% of PnL from 2022; s = 1.0 caps total notional ≈ 13% |
+| S4 | B | Gap continuation/fade | Mixed | Needs SIP pre-market; dividend adjustment |
+| S5 | — | Hold cash | 0% DD | Default |
 
-Order: S3-ETF → S2 → (SIP) S1 → S4. Long-only until Phase 6.
+Order: S3-ETF → S2 → (SIP, ≥ $70k) S1 → S4. Long-only until Phase 6.
 
-### 5.3 Research protocol (pre-registered, no exceptions)
+### 5.3 Research protocol (pre-registered)
 
-1. **Data:** Alpaca historical SIP minute bars and quotes, ≥ 5 years, `adjustment=all`
-   for features and raw for accounting. Universe: Track A ETFs; Track B ≈ 200 most-liquid
-   names + ETFs (not Russell 1000 — 490M minute rows is not credible on a small VPS).
-   Survivorship: Alpaca's asset list is current-state only; point-in-time constituents
-   require an external source (D7). Until one is chosen, Track B results carry a stated
-   survivorship bias and G1 for Track B is blocked.
-2. **Fill rules (no look-ahead):** a signal at bar-t close executes no earlier than bar
-   t+1 open; stop fills at `min(stop, next open)` for longs minus stop slippage
-   (gap-through modelled); halts fill at the reopen print; limit targets fill only if
-   price trades *through* them; partial fills per the capacity rule.
-3. **Costs** per §2.3 with spread-aware slippage from historical NBBO; stress 1×/2×/3×.
-4. **Parameters:** ≤ 5 free parameters; grid **pre-registered** before running; selection
-   only *inside each train fold* with a fixed rule; OOS concatenation uses per-fold
-   selections; grid surfaces reported per fold.
-5. **Walk-forward:** anchored, 12-month train / 3-month test, rolling.
-6. **Holdout:** the most recent 12 months are evaluated **exactly once** at G1 sign-off.
-   A fail burns the holdout for that strategy family.
-7. **Trial registry:** every run is `(code_hash, config_hash)`; the backtester refuses to
-   run unregistered configs; DSR uses the registry count. Implication stated honestly:
-   with ~100 registered trials over 4 OOS years, DSR > 0.95 needs post-cost annualized
-   Sharpe ≈ 2; with 10 trials ≈ 1.6.
-8. **Sharpe definition:** daily strategy returns at intended risk, annualized ×√252,
-   over the concatenated OOS series, reported with standard error.
-9. **Regime:** positive in ≥ 3 of 4 OOS years and ≥ 2 of 3 VIX terciles; no single year
-   > 50% of profit.
-10. **Monte Carlo:** bootstrap OOS trades 10,000× → 95th-percentile max drawdown < 8%
-    at the intended risk.
-11. **Capacity:** position ≤ 1% of the symbol's 20-day median 1-minute volume at the
-    entry minute.
-12. **Fixed-cost hurdle:** expected annual net PnL at the equity where the strategy would
-    trade ≥ 2 × (data + hosting) for that track.
-13. **Trade-rate floor:** ≥ 0.75 trades per trading day averaged over OOS (so live gates
-    are reachable).
+1. **Data:** SIP minute bars + NBBO quotes, **≥ 7 years** (Alpaca history from 2016);
+   `adjustment=all` for features, raw for accounting. Track A ETFs; Track B ≈ 200 names.
+   Point-in-time constituents need an external source (D7); until chosen, Track B G1 is
+   blocked.
+2. **Fill rules:** signal at bar-t close executes no earlier than bar t+1 open; limit
+   entries fill only on trade-through (not touch); stops fill at `min(stop, next open)`
+   minus stop slippage, and for Track B at `min(stop − slippage, trigger-bar low + half
+   spread)` in stress runs; halts fill at the reopen print; limit targets on trade-through;
+   partial fills per capacity.
+3. **Costs** per §2.3; stress 1×/2×/3×.
+4. **Parameters:** ≤ 5; grid **pre-registered**; selection only inside each train fold
+   with a fixed rule; OOS uses per-fold selections; per-fold surfaces reported.
+5. **Walk-forward:** anchored *expanding* window, initial train 12 months, 3-month test
+   steps.
+6. **Holdout:** most recent 12 months evaluated **exactly once per family per 12 months**;
+   family = strategy ID × track; registry append-only and git-committed.
+7. **Trial registry:** every walk-forward *run* is `(code_hash, config_hash)`; in-fold grid
+   points do not count, abandoned runs do; synthetic runs are flagged and excluded from
+   holdout burn and DSR counts. DSR computed with N = registered runs in the family, V =
+   variance of their OOS Sharpes (floor 0.5² if N < 10), skew/kurtosis from OOS daily
+   returns, T = OOS days.
+8. **Sharpe:** daily returns at `r*`, annualized ×√252, with standard error.
+9. **Regime:** positive in ≥ 3 of 5 OOS years and ≥ 2 of 3 VIX terciles; no year > 50%.
+10. **Monte Carlo (one definition everywhere):** stationary block bootstrap on daily PnL
+    (block 5–10 days), 252-day horizon, at `r*`, with the ladder simulated;
+    **95th-percentile max drawdown ≤ 8%**.
+11. **Capacity:** ≤ 1% of the symbol's 20-day median 1-minute volume at the entry minute.
+12. **Fixed-cost hurdle:** after-tax expected annual PnL at the intended equity ≥ 2 × (data
+    + hosting) for the track.
+13. **Trade-rate floor:** ≥ 0.75 trades per trading day over OOS.
+14. **Stress-factor validation (Track B):** replay the final `s` table against every LULD/
+    halt event in the universe over the window; report max realized reopen loss vs `s`.
 
-### 5.4 Promotion gates (numeric, automatic; state in DB keyed by strategy hash)
+### 5.4 Promotion gates (numeric, automatic; state keyed by strategy hash; live metrics in R units)
+
+Definitions: *allocation* = fraction of the strategy's notional cap (§4.1) it may use;
+*target* = allocation from §5.5 (100% for a single live strategy); *clean day* = no
+demotion trigger, no incident row, reconciliation clean; *band* = bootstrap envelope of the
+maximum excursion of the cumulative-R path over n ≤ 100 trades (simultaneous 5%/95%
+coverage), evaluated only at n ≥ 10, OOS mean shrunk 50% for the demotion band.
 
 | Gate | From → To | Requirements |
 |------|-----------|--------------|
-| G1 | Idea → Backtested | §5.3 complete; OOS Sharpe ≥ 1.0 at the stress multiple for its track; DSR ≥ 0.95; MC 95% MDD < 8%; ≥ 300 OOS trades **and** ≥ 0.75 trades/day; regime rule; fixed-cost hurdle; holdout passed once |
-| G2 | Backtested → Paper-done | Paper on Alpaca on the **same feed as live**, ≥ 40 trading days and ≥ 30 trades; cumulative PnL stays inside the backtest MC 10–90 band for the realized trade count; **counterfactual slippage** (each paper fill re-priced against historical SIP NBBO at the fill timestamp) ≤ modeled; **signal agreement ≥ 95%** between the live feed and a nightly SIP replay; reconciliation clean. (Paper fill quality itself is *not* evidence — Alpaca paper fills at quote.) |
-| G3 | Paper-done → Micro-live | Checklist: Phase-1 acceptance tests green on the current commit; chaos tests passed within 30 days; watchdog **and** flattener each performed a live close-all drill on a 1-share position; HWM seeded; broker config asserted; owner TOTP approval. Allocation 10%, per-trade risk 0.25% (this strategy only) |
-| G4 | Micro-live → Full | ≥ 40 trading days and ≥ 30 live trades; realized slippage (real fills) ≤ 1.5× modeled; cumulative PnL inside MC 10–90 band; live MDD < 5%; then allocation ramps 10→25→50→100% of target, each step after 20 more clean days |
-| Portfolio gate | before any 2nd strategy gets allocation | day-bootstrapped portfolio MC (preserving co-occurrence) 95% MDD < 8%; 60-day PnL correlation with each live strategy < 0.6 |
-| Demotion | any level → one lower | **sequential test**: cumulative PnL after *n* trades below the MC 5th percentile for *n* trades, **or** live MDD > MC 95% MDD, **or** slippage > 1.5× modeled over 30 trades. Demotion flattens that strategy's positions, sets allocation 0; re-promotion requires a fresh full window; two demotions in 6 months → Idea. (Rolling-Sharpe triggers are banned: a 20-day Sharpe has SE ≈ 3.5.) |
+| G1 | Idea → Backtested | §5.3 complete; **DSR ≥ 0.95** (the effective Sharpe bar follows from N); MC 95% MDD ≤ 8% at `r*`; ≥ 300 OOS trades and ≥ 0.75/day; regime rule; fixed-cost hurdle; holdout passed once |
+| G2 | Backtested → Paper-done | Paper on the same feed as live, ≥ 40 trading days and ≥ 30 trades (a **plumbing gate**, t ≈ 1.4 — not evidence of edge); cumulative R inside the band; counterfactual slippage (paper fills re-priced against historical SIP NBBO) ≤ modeled; modeled fees subtracted from paper PnL regardless of whether paper debits them; **per-minute signal-state agreement** between live feed and nightly SIP replay: 40-day mean ≥ 95%, no day < 90%; reconciliation clean |
+| G3 | Paper-done → Micro-live | Phase-1 tests green on the current commit; chaos suite passed within 30 days; watchdog **and** flattener each performed a live 1-share close-all drill; HWM seeded; broker config asserted; owner TOTP. Allocation = `max(1 share, 10%)`, per-trade risk 0.25% (this strategy only) — with SPLG/QQQM for share granularity |
+| G4 | Micro-live → Full | ≥ 40 trading days, ≥ 30 live trades (plumbing gate); realized slippage (real fills) ≤ 1.5× modeled; cumulative R inside the band; live MDD in R ≤ MC 95% MDD in R; then allocation ramps 10→25→50→100% of target, each step after 20 clean days |
+| Portfolio gate | before a 2nd strategy gets allocation | day-block-bootstrapped portfolio MC 95% MDD ≤ 8% at combined `r*`; 60-day PnL correlation with each live strategy < 0.6 |
+| Demotion | one level down | cumulative R below the demotion band at any n ≥ 10, **or** live MDD (R) > MC 95%, **or** slippage > 1.5× modeled over 30 trades. Flattens that strategy, allocation 0; re-promotion needs a fresh full window; two demotions in 6 months → Idea |
 
 ### 5.5 Allocation across strategies (only once ≥ 2 strategies are at G4)
 
-¼-Kelly on OOS trade distributions, capped by §4.1; correlation guard (> 0.6 → combined
-cap of one); weekly rebalance, ±10 pp/week. Deferred until it is needed.
+¼-Kelly on OOS trade distributions, capped by §4.1; correlation guard; weekly rebalance
+±10 pp. Deferred until needed.
 
-### 5.6 Risk per trade `r*` (derived, not fixed)
+### 5.6 Risk per trade `r*` (derived)
 
-`r* = max r ≤ 1.5% such that portfolio MC 99% MDD ≤ 7%`, recomputed monthly from live +
-OOS trades, scaled by the drawdown ladder. Initial value 0.5%. Each strategy declares a
-stop-distance floor so that `r*` is reachable under the notional caps (e.g., a 0.3% stop
-at 10% notional expresses only 0.03% risk — such a strategy is not gateable for Track B).
+`r* = max r ≤ 1.0% such that the §5.3.10 Monte Carlo (252 days, day-block bootstrap, ladder
+simulated) gives 95% MDD ≤ 8%`; recomputed monthly on live + OOS; initial 0.4%. Published
+as a table `r*(Sharpe, trades/day)` so the owner sees the growth ceiling before D1
+(indicatively: Sharpe 1 → ≈ 0.3%; Sharpe 2 → ≈ 0.5%). Each strategy declares a
+stop-distance floor and the gate enforces it, so `r_eff = min(r*, stop% × notional cap)`
+is reachable.
 
 ---
 
 ## 6. Growth mechanics and economics
 
-### 6.1 Minimum viable capital (owner must see this before D1)
+### 6.1 Expected returns and minimum capital (the owner must see this before D1)
 
-Fixed costs: hosting ≈ $180/yr (two VPS); SIP data $1,188/yr (Track B only). Rule of
-thumb: fixed costs ≤ 2% of equity, and a genuine post-cost Sharpe-1.2 intraday strategy at
-0.5% risk and 0.25R expectancy yields roughly 9–35% gross/yr before caps and before tax.
+`E[gross] ≈ Sharpe × σ_annual`, `σ_annual ≈ r_eff × σ_R × √(trades/yr)`. With `r_eff`
+0.3–0.5%, `σ_R ≈ 1`, ~250 trades/yr: σ_annual ≈ 5–8%; Sharpe 1–2 → **gross 4–16%/yr**
+for one Track A strategy. Two uncorrelated strategies under the same drawdown budget add
+roughly 1.4× (not 2×). Tax at 30% on gross; fixed costs non-deductible.
 
-| Starting equity | Track | Fixed cost / yr | Fixed cost % | Plausible gross | After fixed costs | After ~30% tax |
-|-----------------|-------|-----------------|--------------|-----------------|-------------------|----------------|
-| $1,000 | A | $180 | 18% | $90–350 | −$90 to +$170 | ≈ 0 |
-| $5,000 | A | $180 | 3.6% | $450–1,750 | $270–1,570 | $190–1,100 |
-| $7,500 | A | $180 | 2.4% | $675–2,600 | $500–2,400 | $350–1,700 |
-| $25,000 | A+B | $1,370 | 5.5% | $2,250–8,750 | $900–7,400 | $600–5,200 |
-| $65,000 | A+B | $1,370 | 2.1% | $5,850–22,750 | $4,500–21,400 | $3,100–15,000 |
+| Starting equity | Track | Gross (4–16%) | Tax (30%) | Fixed cost | Net | Net % |
+|-----------------|-------|---------------|-----------|------------|-----|-------|
+| $5,000 | A | $200–800 | $60–240 | $180 | −$40 to +$380 | −1% to 8% |
+| $10,000 | A | $400–1,600 | $120–480 | $180 | $100–940 | 1–9% |
+| $25,000 | A | $1,000–4,000 | $300–1,200 | $180 | $520–2,620 | 2–10% |
+| $70,000 | A+B | $2,800–11,200 | $840–3,360 | $1,370 | $590–6,470 | 1–9% |
+| $150,000 | A+B | $6,000–24,000 | $1,800–7,200 | $1,370 | $2,830–15,430 | 2–10% |
 
-Recommendations recorded as defaults: **minimum $5,000 (Track A only); Track B not
-before $25,000.** Below $5,000 the plan recommends not running live at all.
+Single numbers, derived from this table: **minimum $10,000 for Track A; $70,000 for Track
+B** (Track B also cannot deploy more than ≈ 13% of equity in single names at s = 1.0, so
+its marginal contribution is small). Below $10,000 the plan recommends not running live.
 
-**Shutdown rule:** if trailing 12-month live net PnL (after fees and data) < fixed costs,
-the system stops and the owner is told. Bracket orders need integer shares: at $5,000
-and 100% ETF notional that is ~8 shares of SPY, so a 0.5% risk ($25) needs a stop
-≥ $3.1/share (≈ 0.5%) — feasible, but integer rounding alone mis-sizes by up to 12.5%,
-and the gate checks the *rounded* qty against every limit. Below ~$3,000 single-share
-granularity makes the limits meaningless; this is recorded in D1.
+**Shutdown rule:** after 12 months at 100% allocation, if net trading PnL (after fees,
+before fixed costs) < fixed costs for those 12 months, stop and tell the owner. The clock
+does not run during ramp.
 
 ### 6.2 Compounding rules
 
-- All limits are fractions of day-start equity, so size scales with the account.
-- HWM ratchets on daily closes; the ladder always protects the new peak.
-- Fixed-cost features (SIP) unlock by equity threshold, not by hand.
-- **Leverage: never.** Gross notional ≤ 100% of equity; `max_margin_multiplier=1` at the
-  broker. (A 10% index shock at 1.5× is 15%; leverage is arithmetically incompatible with
-  the constraint.) The v1 Phase-6 leverage item is deleted.
-- Shorting: Phase 6, ETFs only, after its own gate (§4.8.7).
-- `r*` re-derived monthly (§5.6) so risk is as large as the drawdown budget allows, no
-  larger.
-- Taxes: gains are short-term; wash-sale deferral applies to re-traded symbols across
-  year-end; the weekly report shows after-tax estimates; Section 475(f) mark-to-market
-  election is D6 (owner + tax advisor).
+- All limits are fractions of `E0`; size scales with the account; HWM ratchets on daily
+  closes; the ladder protects the new peak.
+- **Leverage: never** (`max_margin_multiplier=1`); gross ≤ 100% of E0, and the stress
+  budget usually binds below that.
+- Shorting: Phase 6, ETFs only, only if permitted at multiplier 1.
+- `r*` re-derived monthly.
+
+### 6.3 Tax and journal
+
+- Journal keeps FIFO lots with wash-sale adjustment (a loss in SPY by S3 followed within 30
+  days by any SPY buy from any strategy is a wash sale); the export reconciles **to** the
+  broker's realized-gain file / 1099-B, not the other way. December losses defer into the
+  next year unless the symbol is not re-bought for 31 days — accepted and reported.
+- Section 475(f)/Trader Tax Status is unlikely at ~190 trades/yr; the $3,000 net-loss cap
+  applies; election deadline April 15 (D6 with a tax advisor).
 
 ---
 
 ## 7. Web app specification
 
-**Exposure:** the dashboard is reachable **only over WireGuard/Tailscale**. The only
-public endpoints are `POST /halt` on the watchdog and on the flattener (bearer token,
-rate-limited, halt-only, no parameters). Re-enable is never reachable from the halt
-route's auth. Sessions expire in 12 h; TOTP on login and on every state-changing action;
-lockout after 5 failures; CSRF tokens on forms.
+**Exposure:** dashboard only over WireGuard/Tailscale. Public endpoints: `POST /halt` on
+halt-receiver A and B — separate no-key containers that atomically write
+`HALT_REQUESTED` (source IP, timestamp) to the watchdog/flattener volume; the safety
+processes poll that file every 1 s. Token ≥ 32 random bytes, constant-time compare,
+rotatable via env, different per host; **valid-token requests are never rate-limited**;
+failed auth is banned by IP. Response `202 {incident_id}`; ntfy confirms "halt received"
+then "confirmed flat at HH:MM:SS". Phone Shortcut with the token is set up in Phase 0 and
+exercised monthly in paper. Re-enable is never reachable from the halt route. Dashboard:
+TOTP on login and on every state change; 12-hour sessions; lockout after 5 failures; CSRF.
 
 **Pages**
-1. **Overview** — PAPER/LIVE banner + account id; engine state (RUNNING/SAFE/HALTED with
-   "confirmed flat at broker at HH:MM:SS" vs "halt sent, awaiting readback"); broker
-   readback positions/orders count with timestamp of last successful poll; engine belief
-   vs broker side-by-side with age; equity, HWM (value + sources), DD gauge against the
-   5/8/10/12/15 ladder; day/week PnL; stress-budget usage `L/B`; feed health; watchdog
-   and flattener last-check times; **HALT** button (→ watchdog `/halt`).
-2. **Positions & Orders** — entry, stop, target, qty, notional, `s`, unrealized PnL, time
-   in trade, strategy hash; "close now" **routes via the watchdog**.
-3. **Strategies** — gate state, allocation, live vs backtest MC band, cumulative-PnL
-   sequential test position, realized vs modeled slippage, signal-agreement score,
-   promotion/demotion history; owner actions (approve G3, pause).
-4. **Research** — runs (hashes, dates, OOS metrics, DSR, MC MDD, per-fold surfaces,
-   holdout status); "promote to paper" if G1 passed.
+1. **Overview** — PAPER/LIVE banner + account id; engine state with "confirmed flat at
+   HH:MM:SS" vs "halt sent, awaiting readback"; **engine readback and watchdog readback
+   side by side with ages**; flattener last status (age); equity, HWM (value, sources,
+   agreement), DD gauge with the 5/8/9/10/11/12/15 ladder; day/week PnL; budget usage `L/B`;
+   feed health; `suspend_trade` state; `FLAT-*` markers present; request budget used/min and
+   last 429; last rejection reason; halt-token last-used IP; HALT button.
+2. **Positions & Orders** — entry, stop, target, qty, notional, `s`, unrealized PnL, time in
+   trade, state (open/halted/halted_hold), strategy hash; "close now" routes via the
+   watchdog.
+3. **Strategies** — gate state, allocation, cumulative-R vs band, realized vs modeled
+   slippage, signal agreement, promotion/demotion history (append-only); approve G3, pause.
+4. **Research** — runs, hashes, OOS metrics, DSR with N, MC MDD, per-fold surfaces,
+   holdout status; "promote to paper".
 5. **Journal / Audit** — every Intent, gate decision, order, fill, rejection, reconciliation
-   result, incident, cash-flow event; CSV export that reconciles to Alpaca's 1099-B CSV.
-6. **Settings** — notification channels; read-only display of limits (limits change only
-   via versioned YAML in the repo).
+   result, incident, cash-flow event, lot/wash-sale ledger; export reconciles to 1099-B.
+6. **Settings** — notifications; read-only limits (versioned YAML); re-enable action (TOTP).
 
-Notifications (ntfy + email): any halt, SAFE entry, gate change, watchdog/flattener
-action, reconciliation mismatch, cash-flow event, 09:25 "alive", 16:05 daily summary.
+Notifications: halt, SAFE entry, gate change, backstop action, mismatch, cash-flow event,
+09:25 "alive", 16:05 summary, missed dead-man.
 
 ---
 
 ## 8. Operations
 
-- Compose stack on host A: `engine`, `strategies` (no egress), `watchdog`, `api`, `db`.
-  Host B: `flattener` only. `research` runs on-demand on the dev machine.
-- Time sync (chrony); broker clock is the reference for all session times.
-- Morning: asset-master refresh, earnings/event calendar load, go/no-go (§4.11).
-- Deploy script refuses during session with anything open (§4.9).
-- DB backups nightly to object storage; HWM also on watchdog volume and broker history.
+- Host A Compose: `strategies`, `engine`, `watchdog`, `halt-receiver`, `api`, `db`.
+  Host B: `flattener`, `halt-receiver`. Research on the dev machine.
+- Broker clock is the reference; chrony on both hosts.
+- Morning: asset master, event calendar, go/no-go. Deploy guard. Nightly DB backup with a
+  quarterly **restore drill**; key-rotation drill (coordinated across hosts).
 - Weekly report: PnL (gross, net, after-tax est.), DD, per-strategy stats, slippage vs
-  model, cost totals, incidents, budget usage.
+  model, costs, incidents, budget usage, wash-sale adjustments.
 - Runbooks: broker outage, data outage, engine crash with open positions, halted symbol,
-  margin call, mismatched fill, key rotation, **Alpaca dashboard liquidate-all + suspend
-  trading** (the ultimate manual path, written on the owner's phone).
+  mismatched fill, key rotation, re-enable, **Alpaca dashboard liquidate-all + suspend
+  trading** (on the owner's phone), monthly halt-path exercise.
 
 ---
 
 ## 9. Testing strategy
 
-- **Unit:** every §4.1 rule incl. budget formula and trimming; tick rounding; qty
-  flooring; idempotent ids; HWM max-of-sources; calendar/early close; cash-flow detection;
-  settled-cash module (adapter-conditional).
-- **Property-based (Hypothesis):** random fill/price/halt sequences never produce
-  DD > 10% without a halt emitted and never violate `L ≤ B` after trimming.
-- **Simulation harness:** replay historical days (incl. 2020-03-16, 2024-08-05) through
-  the live engine code with a fake broker supporting partial fills, rejects, 429s,
-  latency, halts, and gaps; assert invariant.
-- **Chaos (paper, during session hours):** `docker pause engine` mid-trade → watchdog
-  flat within 60 s; `docker pause watchdog` → engine stops entries, dead-man alerts;
-  pause both → flattener closes at 15:57; cut network → SAFE; duplicate fill event → one
-  position; stale data → exit; halt + `docker restart engine` → no orders submitted.
-- **Malicious strategy test:** strategy attempts env/key access, `importlib`, raw socket
-  → cannot reach broker.
-- **Broker sandbox:** paper API end-to-end nightly; 1-share live close-all drills before
-  G3.
-- **Backtest reproducibility:** run twice from `(code_hash, config_hash, data_snapshot)`
-  → identical metrics.
+- **Fake broker** (adapter contract): partial fills, rejects incl. 403 held-qty and 403
+  buying-power, 429 storms, latency, `pending_cancel` stalls, LULD and market-wide halts,
+  gap opens, activities injection, `suspend_trade` semantics, bracket TIF semantics.
+  Contract suite passes against fake and Alpaca paper.
+- **Unit:** every §4.1 rule incl. Σ budget, trim, ladder; tick/qty rounding; idempotent ids;
+  HWM proportional adjustment and max-of-stores; cash identity; activity allow-list;
+  calendar/early close; MWCB rules; Intent schema rejection of crafted payloads.
+- **Property-based (Hypothesis):** random fill/price/halt/flow sequences through the gate +
+  reconciler + fake broker never produce DD > 10% without a halt and never leave `L > B`
+  unresolved (trim or SAFE) after one cycle.
+- **Simulation harness:** historical replays (2020-03-16, 2024-08-05, a T1-halt day)
+  through live engine code + fake broker; invariant asserted.
+- **Chaos (paper, session hours):** `docker pause engine` → watchdog flat ≤ 60 s +
+  `HALTED_TODAY`; pause watchdog → engine SAFE, dead-man alert; pause both → flattener flat
+  by 15:58; **all three actors flatten simultaneously → one clean flat, zero 403-induced
+  SAFE transitions**; cut network → SAFE; duplicate fill → one position; stale data → exit;
+  halt + `docker restart engine` (with `_test_always_buy` active) → 0 orders in 5 min and ≥
+  5 Intents rejected `HALTED`; re-enable without a valid TOTP row → still HALTED; with it →
+  SAFE and `suspend_trade == false`.
+- **Malicious strategy test** (§3 rule 1).
+- **Backtest reproducibility:** identical metrics on re-run; 1,000 synthetic random
+  strategies → ≤ 0.5% pass G1, flagged synthetic.
 
 ---
 
-## 10. Roadmap (phases → steps, each with a runnable acceptance test)
+## 10. Roadmap (each step: runnable, falsifiable acceptance test)
 
-Realistic calendar for one developer: Phase 1 ≈ 4–6 weeks; Phase 2 ≈ 3–4 weeks; each
-strategy's research ≈ 2–4 weeks; paper 40 trading days; micro-live 40 trading days →
-**first strategy at full allocation ≈ 8–10 months from start**. Anything not protecting the
-invariant is deferred.
+Calendar for one developer: Phase 0 ≈ 1–2 weeks; Phase 1 ≈ **10–12 weeks** (session-hour
+tests get one attempt per day); Phase 2 ≈ 4 weeks; each strategy 2–4 weeks; paper 40
+trading days; micro-live 40 days; ramp 60 days → **first strategy at full allocation ≈
+11–13 months**.
 
-### Phase 0 — Decisions & accounts (owner)
-- 0.1 Record D1–D7 in `docs/DECISIONS.md`. *Accept:* file exists with every ID answered
-  or the default explicitly accepted.
-- 0.2 Open Alpaca account; create paper keys; **test whether two key pairs can be active
-  simultaneously** (create, call `/v2/account` with both, revoke one, confirm the other
-  still works). *Accept:* result recorded; §4.4 key design chosen accordingly.
-- 0.3 Set broker config on paper: `max_margin_multiplier=1`, `no_shorting=true`.
-  *Accept:* `GET /v2/account/configurations` shows both.
-- 0.4 Notification channel. *Accept:* test message received on phone.
-- 0.5 Provision host B (different provider) and the dead-man service. *Accept:* a
-  deliberately missed ping produces an alert.
+### Phase 0 — Decisions, accounts, broker facts
+- 0.1 `docs/DECISIONS.md` with D1–D7 answered or defaults accepted. *Accept:* file complete.
+- 0.2 Alpaca account; paper keys; test two simultaneous key pairs. *Accept:* result
+  recorded; §4.4 key design chosen.
+- 0.3 Paper config: multiplier 1, `no_shorting`, options 0, crypto off. *Accept:* readback
+  matches; the exact accepted PATCH fields recorded.
+- 0.4 Notification channel + phone halt Shortcut. *Accept:* a POST **from the phone** yields
+  `202` and the ntfy confirmation.
+- 0.5 Host B + dead-man service + WireGuard. *Accept:* missed ping alerts; dashboard port
+  unreachable from the public internet (`nmap` from outside).
+- 0.6 **Broker semantics probe → `docs/BROKER_FACTS.md`** (each fact with the captured
+  request/response and date): does `suspend_trade` block `DELETE /positions`, market sells,
+  and dashboard liquidate-all; bracket parent/leg TIF sharing; child-leg qty on partial
+  fills; 403 on a second sell against held qty; WebSocket connection limit on Basic; can an
+  order be accepted on a halted symbol; is shorting allowed at multiplier 1; paper fee
+  debits; paper `suspend_trade`; portfolio-history cash-flow fields; activity type codes for
+  ACH/wire. *Accept:* table complete; §4.2/§4.4/§4.8 amended.
 
-### Phase 1 — Skeleton, risk gate, watchdog, flattener, halt (no strategies yet)
-- 1.1 Repo scaffold (`engine/`, `strategies/`, `watchdog/`, `flattener/`, `api/`,
-  `research/`, `infra/`), Compose, Postgres, CI (lint, `import-linter`, tests).
-  *Accept:* `docker compose up` healthy; CI green on an empty test.
-- 1.2 Broker adapter + Alpaca paper impl: account, configurations, positions, orders
-  (bracket with GTC legs), cancel-all, close-all, clock, calendar (incl. early close),
-  activities, portfolio history. *Accept:* integration test during session hours places a
-  1-share bracket, verifies both child legs exist with correct qty, cancels, confirms
-  readback 0/0.
-- 1.3 Verified flatten loop (§4.6). *Accept:* with 2 paper positions and 1 pending order,
-  flatten returns only after readback 0/0; injected `pending_cancel` stall is handled.
-- 1.4 Risk gate: budget formula, hard caps, one-per-symbol, pending-order exposure,
-  sanity caps, tick/qty rounding, day-start equity source, universe exclusions.
-  *Accept:* unit tests per rule; Hypothesis property test (§9) passes 10,000 cases.
-- 1.5 HWM ledger with three sources + cash-flow detection. *Accept:* delete DB → HWM
-  unchanged; injected `CSD` activity → HALT.
-- 1.6 Reconciler with position-protection invariant and config assertions. *Accept:*
-  cancel a stop leg manually in the paper dashboard → new stop placed within 30 s; set
-  `no_shorting=false` manually → halt.
-- 1.7 Engine state machine + latching halt + go/no-go. *Accept:* halt, `docker restart
-  engine`, assert zero orders submitted for 5 minutes; re-enable requires TOTP.
-- 1.8 Watchdog (heartbeat, DD, 15:57 rule, `/halt`, dead-man). *Accept:* `docker pause
-  engine` with a paper position → flat within 60 s, incident row; `curl -X POST /halt`
-  with engine paused → flat.
-- 1.9 Strategy container isolation + malicious strategy test. *Accept:* test strategy
-  cannot reach `paper-api.alpaca.markets` (connection refused) and `import-linter` fails
-  on a forbidden import.
-- 1.10 Off-host flattener on host B. *Accept:* pause engine and watchdog at 15:50 with a
-  paper position → flat by 15:58; DD simulated via a fake HWM → close-all + `suspend_trade`.
-- 1.11 Minimal dashboard (server-rendered): overview fields in §7.1, HALT button wired to
-  watchdog. *Accept:* HALT with API service stopped still flattens (button hits the
-  watchdog port directly); dashboard unreachable from the public internet.
-- 1.12 Deploy guard + runbooks + chaos test suite runnable by one command.
-  *Accept:* all §9 chaos tests pass in paper during a session.
+### Phase 1 — Skeleton, fake broker, gate, watchdog, flattener, halt
+- 1.1 Scaffold, Compose (two networks, hardened strategy container), Postgres, CI (lint,
+  import-linter, tests). *Accept:* `compose up` healthy; CI green.
+- 1.2 Broker adapter interface + Alpaca paper impl (account, configurations, positions,
+  orders, brackets, cancel/close, clock, calendar, activities, portfolio history, statuses
+  stream). *Accept:* in session hours, 1-share bracket placed, both legs verified with
+  correct qty, cancelled, readback 0/0.
+- 1.2b **Fake broker** per §9. *Accept:* contract suite passes against fake and paper.
+- 1.3 Verified flatten loop + arbitration markers + un-suspend ordering. *Accept:* against
+  the fake broker: `pending_cancel` stall, 403 held-qty, `suspend_trade=true` at start, and
+  three concurrent actors → one clean flat, correct priority, `suspend_trade` set only after
+  0/0.
+- 1.4 Risk gate: Σ budget, ladder, trim procedure, caps, rounding, stop-distance floor,
+  snapshot-age rule, universe exclusions, Intent schema. *Accept:* unit tests per rule;
+  Hypothesis 10,000 cases (§9).
+- 1.5 HWM ledger (file + DB, proportional flows) + cash identity + activity allow-list.
+  *Accept:* delete DB → HWM unchanged; fake-broker injected `CSD`/`JNLC`/`ACATC` → HALT
+  same cycle; injected `INT` → no halt, HWM may rise; paper "reset" (cash changes, no
+  activity) → identity check fires.
+- 1.6 Reconciler: protection invariant (cancel-then-place), config asserts, arbitration
+  check. *Accept:* cancel a stop leg in the paper dashboard → new stop ≤ 30 s; set
+  `no_shorting=false` → HALTED; then re-enable path per §4.10 test.
+- 1.7 State machine + latching halt + `HALTED_TODAY` + go/no-go + test fixtures
+  (`strategies/_test_always_buy`, paper-only; `--seed-position`). *Accept:* the halt/
+  restart chaos test in §9; mid-session boot stays SAFE.
+- 1.8 Watchdog (heartbeat file with timestamps, DD −10%, 15:57, `HALT_REQUESTED`, readback
+  to DB, re-enable consumer, dead-man). *Accept:* pause engine with a seeded position → flat
+  ≤ 60 s, `HALTED_TODAY`, incident row; halt-receiver POST with engine paused → flat.
+- 1.9 Strategy isolation + malicious strategy test (§3). *Accept:* all bypass attempts fail;
+  import-linter fails on a forbidden import; crafted payload rejected with incident.
+- 1.10 Off-host flattener (AM pass, 15:57, 11%, status POST, `FLATTENER_HWM_OVERRIDE`
+  honored only for the paper account id). *Accept:* pause engine + watchdog at 15:50 with a
+  seeded position → flat by 15:58; override on a live id ignored (unit test); AM pass closes
+  a seeded overnight position and does not touch a 09:32 entry.
+- 1.11 Dashboard (server-rendered) with §7.1 fields; HALT button → halt receiver. *Accept:*
+  HALT with API stopped still flattens; watchdog readback visible with engine paused.
+- 1.12 Rate budget per process; deploy guard; backups + restore drill; key-rotation drill;
+  runbooks; one-command chaos suite. *Accept:* all §9 chaos tests pass in paper.
 
 ### Phase 2 — Data & research infrastructure
-- 2.1 Historical loader (SIP minute bars + quotes, `adjustment=all` and raw) for Track A
-  ETFs and the Track-B 200-name list; incremental daily updater. *Accept:* ≥ 99.5% of
-  expected session minutes per symbol-day, zero duplicate timestamps; a known split date
-  reproduces the adjusted series.
-- 2.2 Event-driven backtester sharing the engine's strategy interface; fill rules §5.3.2;
-  cost model §2.3 with NBBO-based slippage. *Accept:* toy strategy reproduces
-  hand-computed PnL to the cent incl. fees; a gap-through stop fills at the open.
-- 2.3 Walk-forward runner with per-fold selection, once-only holdout lock, trial registry
-  (refuses unregistered configs), DSR, MC MDD, regime table. *Accept:* 1,000 random
-  strategies → ≤ 5% pass G1; an unregistered run is refused.
-- 2.4 Research page listing runs and gate status. *Accept:* a run's G1 report renders
-  with every §5.4 field.
+- 2.1 Historical loader (SIP bars + quotes, adjusted and raw, ≥ 7 years) + daily updater.
+  *Accept:* ≥ 99.5% of session minutes per symbol-day; zero duplicate timestamps; a known
+  split reproduces the adjusted series.
+- 2.2 Backtester sharing the engine interface; §5.3.2 fill rules; §2.3 costs from NBBO.
+  *Accept:* toy strategy reproduces hand-computed PnL to the cent incl. fees; gap-through
+  stop fills at the open; limit entry fills only on trade-through.
+- 2.3 Walk-forward runner (expanding), per-fold selection, holdout lock per family, trial
+  registry (refuses unregistered; synthetic flag), DSR with N, block-bootstrap MC, `r*`
+  table, regime table. *Accept:* 1,000 synthetic strategies → ≤ 0.5% pass G1 and none burns
+  a holdout; unregistered run refused.
+- 2.4 Research page. *Accept:* a G1 report renders every §5.4 field.
 
-### Phase 3 — Strategy research (S3-ETF → S2 → [SIP] S1 → S4)
-- 3.x Per strategy: pre-register grid → implement → folds → costs stress → regime, MC,
-  capacity, fixed-cost hurdle → holdout once → G1 record. *Accept:* G1 report in DB with
-  PASS or FAIL and reason. **FAIL is a valid outcome.** Track B blocked until D7 (survivorship
-  source) is resolved.
+### Phase 3 — Strategy research (S3-ETF → S2 → [SIP, ≥ $70k] S1 → S4)
+- 3.x Pre-register grid → implement → folds → stress → regime, MC, capacity, hurdle,
+  stress-factor validation (Track B) → holdout once → G1 record. *Accept:* PASS with every
+  number or FAIL with reason. **FAIL is a valid outcome.**
 
 ### Phase 4 — Paper (same feed as live)
-- 4.1 Reset paper equity to D1; run G1-passed strategies with the full gate. *Accept:*
-  ≥ 40 trading days, ≥ 30 trades, reconciliation clean, MC band check, counterfactual
-  slippage report, signal-agreement ≥ 95%.
-- 4.2 Monthly chaos re-run. *Accept:* all pass.
+- 4.1 Reset paper equity to D1; run G1-passed strategies with the full gate. *Accept:* ≥ 40
+  days, ≥ 30 trades, band check, counterfactual slippage, signal agreement, fee handling
+  recorded, reconciliation clean.
+- 4.2 Monthly chaos re-run and halt-path exercise. *Accept:* all pass.
 
 ### Phase 5 — Micro-live
-- 5.1 G3 checklist; fund account with D1 exactly; install live keys on hosts A and B;
-  1-share live close-all drills by watchdog and flattener. *Accept:* drills logged;
-  activities show one deposit and it predates go-live.
-- 5.2 10% allocation / 0.25% risk for ≥ 40 trading days. *Accept:* G4 metrics met or
-  demotion fired; weekly owner review; post-mortem per halt.
+- 5.1 G3 checklist; fund with D1 exactly; live keys on both hosts; 1-share live close-all
+  drills by watchdog and flattener. *Accept:* drills logged; activities show one `CSD`
+  predating go-live.
+- 5.2 `max(1 share, 10%)` allocation / 0.25% risk for ≥ 40 days. *Accept:* G4 metrics or
+  demotion; weekly review; post-mortem per halt.
 
 ### Phase 6 — Scale
-- 6.1 Ramp per G4. 6.2 Second strategy after portfolio gate. 6.3 SIP + Track B at
-  ≥ $25k (or D2). 6.4 ETF shorting only after its own gate. *Accept:* each step logged
-  with its 20-day clean-window evidence.
+- 6.1 Ramp per G4 (each step: 20 clean days verified from the journal). 6.2 Second strategy
+  after the portfolio gate. 6.3 SIP + Track B at ≥ $70k (or D2). 6.4 ETF shorting only if
+  permitted at multiplier 1 and after its own gate. *Accept:* numeric gate evidence per
+  step.
 
 ---
 
@@ -688,23 +779,25 @@ invariant is deferred.
 
 | ID | Decision | Default if unanswered |
 |----|----------|-----------------------|
-| D1 | Starting capital | Plan recommends ≥ $5,000; below that, do not go live (§6.1) |
-| D2 | Pay $99/mo for SIP before $25k equity | No; Track A only |
+| D1 | Starting capital | ≥ $10,000 for Track A; below that, do not go live |
+| D2 | Pay $99/mo SIP before $70k | No |
 | D3 | Notification channel(s) | ntfy + email |
-| D4 | Hosting | Host A: small US-East VPS; Host B: different provider |
-| D5 | Shorting ever allowed | ETFs only, Phase 6, after its gate |
-| D6 | Tax treatment (Section 475(f) election) | Owner consults a tax advisor; plan reports after-tax at 30% |
-| D7 | Point-in-time universe source for Track B | None chosen → Track B research blocked |
+| D4 | Hosting | Host A US-East VPS; Host B different provider |
+| D5 | Shorting ever | ETFs only, Phase 6, if allowed at multiplier 1 |
+| D6 | Marginal tax rate; 475(f) | 30%; no election (advisor) |
+| D7 | Point-in-time universe source for Track B | None → Track B research blocked |
 
 ---
 
 ## 12. Sources consulted (2026-09-02)
 
 - Gauntlet Loop: github.com/trilwu/gauntlet-loop-skills; github.com/NicholasSpisak/gauntlet-loop
-- Robinhood API status: github.com/sanko/Robinhood; apidog.com/blog/robinhood-api; bitget.com/wiki
-- PDT retirement: SEC order on SR-FINRA-2025-017; FINRA Regulatory Notice 26-10; schwab.com; tastytrade.com; tradezero.com
-- Alpaca: account model (support "Can I have a cash account", "What are Unsettled Funds"); intraday margin framework blog; account configurations reference (`max_margin_multiplier`, `no_shorting`, `dtbp_check`, `suspend_trade`); orders doc (buy-stop conversion, sell stops not converted); 24/5 limit-only; paper-trading mechanics (github.com/alpacahq/alpaca-docs); alpaca-py README; data plans and IEX coverage (docs market-data-faq, forum threads)
-- Fees: FINRA Information Notice 2026-03-17 (Section 31 $20.60/M); FINRA TAF 2026 ($0.000195/share, cap $9.79)
-- Day-trader profitability: Jordan & Diltz (FAJ 2003); Chague, De-Losso & Giovannetti
-- Strategies: Zarattini & Aziz (SSRN 4416622, 4729284); Zarattini, Barbon & Aziz 2024 (SPY); replication github.com/giovannibrusco/zarattini-2023-orb-qqq
+- Robinhood API status: github.com/sanko/Robinhood; apidog.com; bitget.com/wiki
+- PDT retirement: SEC order on SR-FINRA-2025-017; FINRA Regulatory Notice 26-10; Alpaca 2026-06-03 changelog (PDT/DTBP deprecation); schwab.com; tastytrade.com
+- Alpaca: cash-account and unsettled-funds support pages; intraday margin framework blog; account configurations (`max_margin_multiplier`, `no_shorting`, `suspend_trade`); orders doc (buy-stop conversion only; halts); bracket TIF (order-types article); 403 insufficient-qty forum thread and Alpaca-API issue #282; rate-limit support page (per account); paper-trading doc (github.com/alpacahq/alpaca-docs); account activities and activity enums; high-yield cash program; portfolio history v2; real-time data `statuses`; corporate-actions announcements; alpaca-py README
+- Market structure: Nasdaq MWCB FAQ (L1/L2/L3)
+- Fees: FINRA Information Notice 2026-03-17 (Section 31); FINRA TAF 2026; CAT fee alerts (2026-1, HA 1A)
+- Tax: Trader Tax Status and 475(f) deadline guides (terms.law)
+- Profitability: Jordan & Diltz (FAJ 2003); Chague, De-Losso & Giovannetti
+- Strategies: Zarattini & Aziz (SSRN 4416622, 4729284); Zarattini, Barbon & Aziz 2024; replication github.com/giovannibrusco/zarattini-2023-orb-qqq
 - Backtest hygiene: Bailey & López de Prado, "The Deflated Sharpe Ratio" (2014)
