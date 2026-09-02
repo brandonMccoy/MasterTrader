@@ -135,6 +135,76 @@ cancel-then-submit path because Alpaca rejects a second sell against held quanti
 
 ---
 
-## Round 3 — plan v3
+## Round 3 — plan v3 → v4 (budget exhausted after this round)
+
+**Verdicts:** C-RISK: B1, B2, B3, B6, GROWTH FAIL; B5 PASS. C-ENG: B1, B6, B7, B8 FAIL.
+C-REG: B3, B4, B5 FAIL. **Materiality verdicts:** C-ENG "YES for micro-live after the
+top-5 changes"; C-RISK "NO until the economics are re-accepted by the owner and the revised
+stress table is re-verified by replay; then YES for Track A only"; C-REG "YES for Track A
+micro-live at ≥ $10k after top-5 plus the Phase 0.6 probes; Track B NO".
+
+**Findings accepted and applied in v4:**
+- *Stress factors:* QQQ at 0.20 permitted −16.75% (beta on an L3 day); sector ETFs at 0.25
+  permitted −18.9%; entries above prior close eroded the reserve. Now QQQ 0.25, IWM/DIA/
+  sector 0.35, large caps ≥ $50B ex-biopharma 0.40 with a 5% cap, in-play 1.00; **per-Intent
+  entry-relative `s_i`**; `DD_eff` = session running max; bound stated as "by construction
+  ≤ 13.5%"; residuals corrected (two large-cap total losses named; three in-play −100% is
+  covered); broker stops acknowledged as broker-simulated.
+- *Halt semantics:* `suspend_trade` un-suspend could undo the owner's manual suspend and
+  leave the account un-suspended with a halted name → latch-before-touch; an unexplained
+  `suspend_trade` is treated as an owner halt; HALTED_TODAY deleted in favor of **one**
+  latching semantic; `HALT_REQUESTED` clearer defined (rename on consume); re-enable row
+  bound to an incident id and TOTP-verified by the watchdog, which also clears the DB row;
+  crash counter stored; two-stage go/no-go (09:15 ARMED → 09:31:45 RUNNING); flattener-owned
+  09:19–09:31:45 window; **a resting market sell is never cancelled** (the actor ping-pong
+  that could leave a halted name unprotected); fail-closed arbitration; single order-writer;
+  post-16:00 GTC stop assigned to the flattener at 16:00:30; missing transitions added;
+  recovery mode via a signed mode row consumed by both backstops.
+- *Broker facts:* halt codes are per tape (UTP H/P/Q vs CTA "2"); SPY/QQQ/IWM/DIA are Tape
+  B → detection rewritten; always-on SPY statuses + price-based MWCB detector; L3 ends the
+  day even after 15:25; paper "reset" creates a new account → re-provisioning step; `opg`
+  orders for the AM pass; multi-day halts no longer stall the whole system; crypto/options
+  asserted via the fields that exist; `buying_power ≤ cash`; ticks at $0.01 with the
+  Nov-2026 half-penny note; dated fee table (TAF 2027).
+- *Flows:* cash identity rewritten around broker-side fills and FEE activities with the
+  residual downgraded to SAFE-then-classify; `pending_transfer_*` asserted every cycle;
+  09:15 cash-continuity gate; activities paged by id with a rescan; `PTC`, negative `INT`,
+  corporate-action types handled; withdrawal `E` timing pinned.
+- *Strategy boundary & halt path:* socket-only RO volume; hash bound to socket by the
+  engine; fixtures/overrides refused on the live account id; receivers on their own volume;
+  `202` carries consumer heartbeat age; receiver-sent ntfy; valid tokens never banned; cert
+  expiry monitored; flattener ntfy/status independent of host A.
+- *Gates & research:* DSR pinned in daily units with the formula and a V floor for all N;
+  N and holdout burns counted per track; holdout pass criterion; in-fold selection rule
+  named; all G1 stats on the 2× run; band definition pinned; demotion band's low power
+  stated and the ramp made contingent on the MDD-in-R trigger; G2 t-statistic corrected
+  (0.4–0.8, not 1.4); G3 "allocation binds"; regime rule made well-defined; `r*` ≥ 0.2%
+  floor; synthetic calibration through the same optimizer; MC at `r_eff`.
+- *Economics:* restated at `r_eff` 0.22–0.27% and 189 trades/yr → σ 3–3.7%, **gross 3–7%**;
+  tax on positive net; hurdle-excluded cells marked; minimum capital derived (**$15k**);
+  **Track B deprioritized as not economically viable under s = 1.0**; shutdown rule aligned
+  with the hurdle; year-one negative stated; objective rewritten ("deployed on OOS
+  evidence, withdrawn on live evidence"); 61-day wash-sale window and IRA rule; D8 = written
+  owner acceptance of the economics.
+- *Roadmap:* 0.4a receivers; 1.6b property/replay suite; rate limiter into 1.2; 0.6 probe
+  list extended; 35 h/week stated; Phase 1 13–16 weeks; cut list; §13 "Known gaps" added.
+
+**Rejected/modified:** C-ENG's suggestion to drop the un-suspend step entirely is made
+conditional on the 0.6 probe. C-RISK's $2B cap floor alternative for in-play names remains
+unused (Track B is deprioritized on economics instead).
+
+---
+
+## Smoothing pass — plan v4
 
 _(pending)_
+
+## Exit status
+
+Budget (3 rounds × 3 critics) exhausted. No bar item reached a unanimous PASS in three
+rounds; the round-3 materiality verdicts were "yes for Track A micro-live after the listed
+changes" (C-ENG, C-REG) and "yes for Track A after owner re-acceptance of the economics and
+replay re-verification of the stress table" (C-RISK). All listed changes are in v4; the
+remaining gaps are enumerated in `TRADING_PLAN.md` §13 and are of three kinds: facts only
+Phase 0.6 can verify, behaviors only a real halt can exercise, and residual scenarios that
+are named rather than covered.
