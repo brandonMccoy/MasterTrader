@@ -14,13 +14,13 @@ under-logged in the transcript, so its row is a floor.
 | Bucket | Tokens | ≈ $ | Share |
 |---|---|---|---|
 | Subagent cache writes (11 agents, all on the parent model) | 1.83M | 22.9 | 37% |
-| Main thread: 3 cold resumes rewriting a ~280k prefix | 0.84M | 16.8 | 28% |
+| Main thread: 3 cold resumes rewriting a ~280k prefix | 0.84M | 16.8 | 27% |
 | Main thread: normal per-turn appends | 0.34M | 6.8 | 11% |
 | Cache reads, main + subagents | 18.1M | 4.5 | 7% |
 | Output: 3 whole-file rewrites of the plan | 78k | 3.9 | 6% |
 | Output: everything else on the main thread (thinking, edits, messages) | 75k | 3.8 | 6% |
 | Subagent output (floor) | 41k | 2.1 | 3% |
-| Uncached input | 29k | 0.3 | 1% |
+| Uncached input | 29k | 0.3 | <1% |
 | **Total** | **21.2M** | **≈ 61** | **100%** |
 
 Other measured facts that shaped the ranking:
