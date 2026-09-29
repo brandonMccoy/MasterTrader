@@ -59,6 +59,29 @@ Findings rejected:
 ## Pass 3 — v3 (final)
 Re-ranked by the corrected table. No mechanism changed after pass 2's fixes; stopped.
 
+## Pass 4 — source review (requested by the owner)
+Sources read directly: Anthropic engineering "Effective context engineering for AI
+agents"; Claude Code docs "Manage costs effectively", "Best practices", "Explore the
+context window"; rtk-ai/rtk (39.5k stars); drona23/claude-token-efficient (6.1k);
+alexgreensh/token-optimizer (2.4k); egorfedorov/claude-context-optimizer (112); the
+yurukusa CLAUDE.md cheat-sheet gist; GitHub issue anthropics/claude-code#44536.
+Two blog write-ups on "19 changes" and "8 tactics" were egress-blocked and not used.
+- Ranking unchanged: every source points the same way on items 1–5 and none supplies a
+  number that would promote a lower item for this repo's measured buckets.
+- Mechanisms added: resume-from-summary, `/btw`, partial summarize via `/rewind`,
+  CLAUDE.md compact instructions, `promptCacheTtl: "1h"` when on usage credits (item 3);
+  official PreToolUse test-filter hook and RTK as the Bash-output drop-in, structure maps
+  and delta re-reads as habits (item 5); prefer CLI over MCP, CLAUDE.md → skills,
+  `/doctor`, code-intelligence plugins, prompt suggestions off (item 9); `/context`,
+  `/usage` cache-miss line with likely cause, `/insights` (item 10); 1–2k-token subagent
+  summary norm and the ~7× agent-teams warning (item 1); reviewer-gap caveat (item 2).
+- Evidence weighed, not just cited: drona23's own benchmark shows 4–12% output reduction
+  and a net loss at low output volume, so the plan keeps a six-line contract instead of
+  importing the file; the cheat-sheet gist has no methodology and is marked corroboration.
+- New fact that reframed item 9: the docs' simulation puts a local startup at ~7.9k
+  tokens; this cloud session's 65k prefix is the web harness, tool schemas and skill
+  listings, of which the repo controls under 3k.
+
 ## Residual uncertainty
 - Subagent output tokens are under-logged in the transcript; the subagent bucket is a floor.
 - Whether `tools:` in agent frontmatter shrinks the agent's cached prefix as much as

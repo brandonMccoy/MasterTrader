@@ -1,7 +1,8 @@
 # Token-Spend Plan for Claude Code in this repo
 
-Status: v3 (final after plan → critique → research → re-plan, three passes). Loop
-history: `docs/TOKEN_LOG.md`. Nothing here is implemented; it is the plan.
+Status: v4 (v3 plus a source review against Anthropic news, the Claude Code docs, and
+the most-starred GitHub token-optimization repos; see §5). Loop history:
+`docs/TOKEN_LOG.md`. Nothing here is implemented; it is the plan.
 Date: 2026-09-29
 
 ## 1. What the money actually went to (measured, not guessed)
@@ -31,6 +32,11 @@ Other measured facts that shaped the ranking:
 - Whole-file rewrites were 51% of main-thread output (40% including subagent output).
 - 12 of 20 WebFetch calls failed on egress-blocked domains: 12 wasted turns.
 - CLAUDE.md is ~600 tokens; it is not a cost lever. Shares are of the $61 total.
+- The docs' own simulation puts a local session's startup at ~7.9k tokens (system prompt
+  4.2k, project CLAUDE.md 1.8k, memory 0.7k, skills 0.45k, environment 0.3k, deferred MCP
+  0.1k). This cloud session started at 65k. The difference is the web harness's larger
+  system prompt, ~20 built-in tool schemas and ~25 skill descriptions, none of which the
+  repo controls; the repo-controllable part is under 3k.
 
 ## 2. The ten, ranked by measured savings for this workflow
 
@@ -50,6 +56,10 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
 - `subagentPromptCacheTtl: "1h"` only for agents whose gaps between tool calls exceed
   5 minutes (long-thinking critics); otherwise the 5-minute default is cheaper.
 - Expected: the 37% bucket ÷ 5 on price and roughly ÷ 2 on volume.
+- Source backing: Anthropic's context-engineering post sets the norm that a subagent
+  "returns a condensed summary of 1,000–2,000 tokens"; the docs' cost page says `model:
+  haiku` for simple subagents, offers "run every subagent on one model", and warns agent
+  teams use ~7× the tokens of a normal session (do not enable them for this repo).
 
 ### 2. Fewer critique rounds, deterministic checks first, blind top-model critic last
 - Before any agent critique, run what a script can check: arithmetic in tables, dangling
@@ -59,6 +69,9 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
 - Keep one fresh, blind, top-model critic for the final gate only.
 - This session used 9 critics across 3 rounds; the same top findings needed 2 combined
   critics plus a final gate. Ceiling on its own numbers: up to ~$15 of the $22.9 bucket.
+- Source backing: the docs' best-practices page warns that a reviewer "prompted to find
+  gaps will usually report some, even when the work is sound" and to tell it to flag only
+  correctness gaps. That is exactly why BLOCKING is defined and the round count is capped.
 
 ### 3. Session lifecycle and a context ceiling
 - At task end run `/clear`. Follow-ups ("I live in Texas") start a fresh session: a 65k
@@ -69,6 +82,13 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
   context, and nothing in the conversation past 100k is usually needed verbatim.
 - Ceiling on this session's numbers: the $16.8 cold-resume bucket plus part of the $4.5
   read bucket.
+- New from the docs: on Pro/Max, resuming a large session after a long break offers
+  **resume from a summary**; take it. The cache TTL drops from 1 h to 5 min once usage
+  credits are being drawn, so set `promptCacheTtl: "1h"` if that applies. Side questions go
+  through `/btw` (the answer never enters history). `/rewind` → "Summarize from here"
+  compacts only part of a conversation. A `# Compact instructions` block in CLAUDE.md
+  tells compaction what to keep (file list, test commands, decisions). `/clear` costs
+  nothing; `/compact` on a large context is itself a large request.
 
 ### 4. Edit, do not rewrite
 - No `Write` on an existing file over 100 lines unless more than 30% of it changes; use
@@ -86,6 +106,16 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
 - Enforcement path: a PostToolUse hook returning `updatedToolOutput` that truncates any tool
   result over 4,000 characters to head + tail with a "truncated, full output at <path>"
   line. Bucket: the $6.8 per-turn appends and every later rewrite of them.
+- Source backing and a better default: the docs' cost page ships a PreToolUse hook that
+  rewrites `pytest`/`npm test`/`go test` to `| grep -A 5 -E '(FAIL|ERROR|error:)' | head
+  -100`. The most-starred repo in this space, **rtk-ai/rtk** (39.5k stars, single Rust
+  binary), does the same for 100+ commands through a Bash hook (cargo test 155 lines → 3;
+  git status 119 chars → 28; authors report 60–90% on command output). It does not touch
+  Read/Grep/Glob, so item 5's Grep→Read discipline still applies. alexgreensh/
+  token-optimizer (2.4k stars) adds "structure maps" (code skeleton instead of full file)
+  and delta re-reads (only the diff since the last read); adopt those two ideas as habits
+  even without the tool. In this session Bash results were only ~2k tokens, so the payoff
+  is for code-heavy sessions, once the app exists.
 
 ### 6. Effort routing
 - `/effort medium` for edit, commit, format, and file-move turns; `high` as the default;
@@ -100,6 +130,12 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
 - No restating the task, no headers under 500 words, commit messages ≤ 6 lines, interim
   narration one sentence and only when the harness asks for it.
 - Shares the $3.8 bucket with item 6; combined ceiling under $2 per session of this size.
+- Source check: drona23/claude-token-efficient (6.1k stars) is a drop-in CLAUDE.md that
+  enforces terse output; its own README reports 4–12% output-token reduction in
+  reproducible 2026 benchmarks and warns the file "adds input tokens per message — net
+  savings only positive at high output volume". Conclusion: keep the contract to the six
+  lines in §3, do not import a long terse-mode file, and note that current models already
+  skip preamble.
 
 ### 8. Turn economy
 - Independent tool calls go in one message. No `TaskCreate`/`TaskUpdate` for tasks under
@@ -115,6 +151,13 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
   repo never uses; auto-memory under 200 lines.
 - The 65k prefix is paid on every cold start and every agent; each 10k trimmed saves
   ~$0.13–0.25 per start and per agent.
+- New from the docs: prefer CLI tools (`gh`, `aws`) over MCP servers, which "don't add any
+  per-tool listing"; move workflow instructions out of CLAUDE.md into skills that load on
+  invocation; run `/doctor` on a checked-in CLAUDE.md to get proposed cuts; install a code
+  intelligence plugin for typed languages so "go to definition" replaces grep-then-read;
+  turn off prompt suggestions (a background request after every response). The yurukusa
+  cheat sheet (CLAUDE.md under 100 lines, decision rules as tables, safety rules moved to
+  hooks) agrees but offers no measurements; treat it as corroboration, not evidence.
 
 ### 10. Measure and budget with enforceable limits
 - `/usage` at the end of every task; the parser in Appendix A for per-bucket dollars.
@@ -122,6 +165,13 @@ Items 1 and 2 overlap (both shrink the subagent bucket); their savings are not a
   read, then report." Token counts are not enforceable from inside an agent.
 - Monthly: look at the largest bucket and change one habit. This document is re-ranked
   when the largest bucket changes.
+- New from the docs: `/context` shows what is occupying the window right now; `/usage`
+  has a `Prompt cache (main)` line reporting misses, the likely cause ("tool definitions
+  changed"), expected rebuilds, and warm/cold with the TTL — this replaces most of the
+  Appendix A script for the main thread; `/insights` writes an HTML report on friction
+  patterns; the plan-usage breakdown attributes spend to subagents, skills and MCP servers.
+  egorfedorov/claude-context-optimizer (112 stars) adds per-file "read but never edited"
+  heatmaps via hooks if per-file waste ever matters here.
 
 ## 3. Proposed CLAUDE.md additions (text only; not applied)
 
@@ -149,6 +199,26 @@ Hostile reviewer. Read only the path:lines given. Grade against the checklist in
 prompt. Write the report to the scratchpad path given; reply with ≤ 15 lines: one line
 per BLOCKING finding, then the file path. At most 30 tool calls.
 ```
+
+## 5. Source review: what Anthropic, the docs, and the popular repos say, and what changed
+
+| Source | What it adds | Effect on the plan |
+|---|---|---|
+| Anthropic engineering, "Effective context engineering for AI agents" | Attention budget: smallest set of high-signal tokens; just-in-time retrieval over pre-loading; compaction keeps decisions and unresolved issues, discards raw outputs; structured note-taking (NOTES.md); subagents return 1–2k-token summaries; tool-result clearing as the lightest compaction | Confirms items 1, 3, 5. Adds the 1–2k summary norm to item 1 and "notes file, not chat history" to item 3 |
+| Claude Code docs, "Manage costs effectively" | `/usage` cache line, `/context`, `/insights`; `/clear` between tasks; `/compact <focus>` and CLAUDE.md compact instructions; Sonnet default, `model: haiku` for simple subagents, one model for all subagents; MCP deferred by default, prefer CLI, `/mcp` disable; PreToolUse test-output filter hook; move CLAUDE.md content to skills, keep < 200 lines; effort/thinking settings; agent teams ~7×; cache TTL 1 h → 5 min on usage credits; resume-from-summary; background requests (prompt suggestions, goal check-ins, cross-session messages) | Adds mechanisms to items 3, 5, 9, 10; confirms 1 and 6 |
+| Claude Code docs, "Best practices" | Context degrades before it fills; verification targets; plan mode only for multi-file work; `/btw`; partial summarize via `/rewind`; after two failed corrections, `/clear` and re-prompt; reviewer-gap caveat; `/doctor` for CLAUDE.md | Adds `/btw` and partial compaction to item 3; reviewer caveat to item 2; "two corrections → clear" as a rule in item 3 |
+| Claude Code docs, "Explore the context window" | Local startup ≈ 7.9k tokens itemized; auto-compact window configurable (`/autocompact 500k`) | Explains the 65k cloud prefix; item 9 scope clarified |
+| rtk-ai/rtk (39.5k stars) | Bash-hook proxy compressing command output 60–90%; not Read/Grep | Item 5: the drop-in once the app has tests and builds |
+| drona23/claude-token-efficient (6.1k stars) | Terse-output CLAUDE.md; 4–12% output reduction; adds input tokens; net positive only for output-heavy sessions | Item 7: keep the contract short; do not import the file |
+| alexgreensh/token-optimizer (2.4k stars) | Structure maps, delta re-reads, output compression (564 → 115 tokens on pytest), compaction checkpoints; 28% measured over 30 days | Item 5 habits; item 3 "checkpoint before compaction" |
+| egorfedorov/claude-context-optimizer (112 stars) | Hook-based per-file waste heatmaps; "30–50% of context unused" claim | Item 10, optional |
+| yurukusa gist "CLAUDE.md Token Optimization Cheat Sheet" | < 100 lines, tables for rules, hooks for safety rules, one example; no methodology | Item 9 corroboration only |
+| GitHub issue anthropics/claude-code#44536 | Heavy setups measured 130–150k startup overhead; proposes lazy loading for skills/rules | Item 9 rationale |
+
+What did **not** change: the ranking. Every source agrees on the direction of items 1–5,
+and none supplies numbers that would move a lower item above them for this repo. The two
+largest measured buckets here (subagent writes, cold resumes) are exactly the two the docs
+name under "Why usage climbs in a long session".
 
 ## Appendix A: measurement script (used to produce §1; optional, not repo code)
 
